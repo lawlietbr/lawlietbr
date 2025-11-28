@@ -2,7 +2,8 @@ package com.SuperFlix
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.extractors.*
+import com.lagradost.cloudstream3.extractors.ExtractorLink
+import com.lagradost.cloudstream3.extractors.ExtractorLinkType
 
 class SuperFlix : MainAPI() {
     override var name = "SuperFlix"
@@ -13,7 +14,6 @@ class SuperFlix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainUrl = "https://superflix20.lol"
-    private val apiUrl = "https://superflix20.lol"
 
     override val mainPage = mainPageOf(
         "filmes" to "Filmes",
@@ -23,7 +23,7 @@ class SuperFlix : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "\( apiUrl/ \){request.data}"
+        val url = "\( mainUrl/ \){request.data}"
         val doc = app.get(url).document
         val items = doc.select("div.items article").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
@@ -40,7 +40,7 @@ class SuperFlix : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "\( apiUrl/?s= \){query}"
+        val url = "\( mainUrl/?s= \){query}"
         val doc = app.get(url).document
         return doc.select("div.Result article").mapNotNull { it.toSearchResult() }
     }
@@ -97,11 +97,11 @@ class SuperFlix : MainAPI() {
                 callback.invoke(
                     ExtractorLink(
                         source = name,
-                        name = "$name - M3U8",
+                        name = name,
                         url = link,
                         referer = mainUrl,
                         quality = Qualities.Unknown.value,
-                        isM3u8 = true
+                        type = ExtractorLinkType.M3U8
                     )
                 )
             }
