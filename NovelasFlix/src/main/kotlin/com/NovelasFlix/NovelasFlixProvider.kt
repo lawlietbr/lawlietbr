@@ -3,6 +3,7 @@ ackage com.NovelasFlix
 import android.content.Context // <-- OBRIGATÓRIO!
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin // <-- CLASSE PAI CORRETA (Plugin, não BasePlugin)
+import com.lagradost.cloudstream3.utils.AppUtils.fixUrl
 
 @CloudstreamPlugin
 class NovelasFlixProviderPlugin: Plugin() {
