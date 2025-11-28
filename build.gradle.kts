@@ -12,7 +12,7 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
+        classpath("com.github.recloudstream:gradle:master-SNnAPSHOT")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
     }
 }
@@ -70,8 +70,7 @@ subprojects {
     dependencies {
         val implementation by configurations
         val cloudstream by configurations
-        cloudstream("com.lagradost:cloudstream3:pre-release")
-
+        implementation("com.github.recloudstream.cloudstream:core:3.6.300001")
         // Other dependencies
         implementation(kotlin("stdlib"))
         implementation("com.github.Blatzar:NiceHttp:0.4.13")
