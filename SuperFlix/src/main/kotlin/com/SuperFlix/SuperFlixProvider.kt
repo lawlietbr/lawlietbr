@@ -1,13 +1,16 @@
 package com.SuperFlix
 
-import com.lagradost.cloudstream3.plugins.BasePlugin
+import android.content.Context // Import essencial
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import android.content.Context // <--- ESTE IMPORT É ESSENCIAL E DEVE ESTAR AQUI!
+import com.lagradost.cloudstream3.plugins.Plugin // <-- CLASSE PAI CORRIGIDA
 
 @CloudstreamPlugin
-class SuperFlixProvider : BasePlugin() {
-    // A assinatura desta função deve ser exatamente assim para fazer o 'override'
-    override fun load(context: Context) { 
+// Mude o nome da classe pai de BasePlugin para Plugin
+class SuperFlixProviderPlugin: Plugin() {
+    
+    // Assinatura correta da função 'load'
+    override fun load(context: Context) {
+        // Registra a API principal
         registerMainAPI(SuperFlix())
     }
 }
