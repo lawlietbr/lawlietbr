@@ -31,8 +31,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: repository
+          name: euluan-repo
           path: |
-            **/build/outputs/repo/repo.json
-            **/build/outputs/cs3/*.cs3
-            **/build/libs/*.jar
+            build/repo/repo.json
+            **/build/outputs/apk/release/*.cs3
