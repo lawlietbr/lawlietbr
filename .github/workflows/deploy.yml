@@ -13,6 +13,14 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # --- CORREÇÃO CRÍTICA DE PERMISSÃO ---
+    # Adicionamos permissão explícita de escrita (write) para 'contents' para que o action-gh-pages possa
+    # dar push na branch gh-pages.
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    # -----------------------------------
     steps:
       
       - name: Baixar Artefatos do Build
@@ -51,8 +59,6 @@ jobs:
           # O unzip extrai o conteúdo do builds/
           unzip euluan-repo.zip
 
-      # ETAPA 'Configurar Git' REMOVIDA. Ela não é necessária e estava causando o erro "fatal: not in a git directory".
-          
       - name: Deploy para GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
