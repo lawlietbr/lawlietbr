@@ -25,22 +25,27 @@ jobs:
       - name: Build with Gradle (Cria os .cs3)
         run: ./gradlew assemble --refresh-dependencies --info
 
-      - name: Generate repository.json (Cria o JSON do Repositório)
+      - name: Generate repository.json
         run: ./gradlew makePluginsJson
         
-      # --- PASSO DETETIVE (DEBUG) ---
-      - name: ONDE ESTÃO OS ARQUIVOS? (DEBUG)
-        # Este comando lista todos os arquivos e pastas recursivamente após o build.
-        # Procure por 'repo.json' ou 'repository.json' neste log!
-        run: ls -R
-        
-      # --- REMOVEMOS A ETAPA 'MV' QUE ESTAVA FALHANDO ---
+      # Esta etapa deve ser crucial para o seu repositório.
+      # Movemos o 'plugins.json' para o nome 'repo.json' dentro da pasta 'builds', 
+      # que é o local mais comum de publicação para CloudStream.
+      # Se builds/plugins.json foi criado, vamos movê-lo para o nome padrão (repo.json)
+      - name: Mover e Renomear para Padrão de Repositório (builds/repo.json)
+        # 1. Cria a pasta 'builds' se ela ainda não existir
+        run: mkdir -p builds
+        # 2. Tenta mover o 'build/plugins.json' para 'builds/repo.json'
+        # O '|| true' garante que o workflow não pare se o arquivo não estiver exatamente lá
+        run: mv build/plugins.json builds/repo.json || true
+
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: euluan-repo
           path: |
-            # Caminhos limpos, sem comentários, para o GitHub Actions
-            builds/repo.json
+            # Caminho corrigido para o arquivo de manifesto JSON
+            builds/repo.json 
+            # Caminho para os arquivos CS3 (geralmente gerados em cada pasta de provedor/build/libs)
             **/build/libs/*.cs3
