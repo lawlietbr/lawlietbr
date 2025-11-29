@@ -1,0 +1,243 @@
+[
+    {
+        "iconUrl": "https://animefhd.com/wp-content/themes/temaa25/img/favicon/270.png",
+        "jarFileSize": 52024,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 15733,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "euluan1912"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AnimeFHD",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimeFHD.jar",
+        "description": "AnimeFHD - Animes em Portugu\u00eas",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimeFHD.cs3",
+        "name": "AnimeFHD"
+    },
+    {
+        "iconUrl": "https://animesonline.cloud/wp-content/uploads/2025/06/logo-_1_.png",
+        "jarFileSize": 77659,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 21003,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "euluan1912"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 1,
+        "internalName": "AnimesCloud",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesCloud.jar",
+        "description": "AnimesCloud - Animes em FHD e HD",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesCloud.cs3",
+        "name": "AnimesCloud"
+    },
+    {
+        "iconUrl": "https://animesdigital.org/wp-content/uploads/2025/03/cropped-logo-e1740827992823-192x192.png",
+        "jarFileSize": 101820,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 27398,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "euluan1912",
+            "Sephiroth"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 2,
+        "internalName": "AnimesDigital",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesDigital.jar",
+        "description": "Animes Digital - Animes em FHD LEG e DUB.",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesDigital.cs3",
+        "name": "AnimesDigital"
+    },
+    {
+        "iconUrl": "https://animesonlinenet.com/wp-content/uploads/2025/08/cropped-Favicon-net-1-1.png",
+        "jarFileSize": 65305,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 18404,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 1,
+        "internalName": "AnimesOnlineNet",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesOnlineNet.jar",
+        "description": "AnimesOnlineNet - Animes",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/AnimesOnlineNet.cs3",
+        "name": "AnimesOnlineNet"
+    },
+    {
+        "iconUrl": "https://static.anroll.net/app-images/favicon.ico",
+        "jarFileSize": 171041,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 36036,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "Hexated",
+            "Mr.Robot",
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 1,
+        "internalName": "Anroll",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/Anroll.jar",
+        "description": "Anroll - Animes em HD",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/Anroll.cs3",
+        "name": "Anroll"
+    },
+    {
+        "iconUrl": "https://donghuanosekai.com/wp-content/uploads/2020/09/cropped-icon_dnsk.png",
+        "jarFileSize": 66724,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 19328,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 1,
+        "internalName": "DonghuaNoSekai",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/DonghuaNoSekai.jar",
+        "description": "DonghuaNoSekai - Donghuas em FHD",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/DonghuaNoSekai.cs3",
+        "name": "DonghuaNoSekai"
+    },
+    {
+        "iconUrl": "https://www.starckfilmes.online/adjust-icon-192x192.png",
+        "jarFileSize": 82270,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 21302,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Torrent"
+        ],
+        "version": 1,
+        "internalName": "StarckFilmes",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/StarckFilmes.jar",
+        "description": "StarckFilmes - Filmes em Torrent",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/StarckFilmes.cs3",
+        "name": "StarckFilmes"
+    },
+    {
+        "iconUrl": "https://superflix.com.br/wp-content/uploads/2023/08/superflix-logo.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 10580,
+        "status": 1,
+        "language": "pt",
+        "authors": [
+            "euluan1912"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "SuperFlix",
+        "description": "SuperFlix - Filmes e S\u00e9ries em Portugu\u00eas",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/SuperFlix.cs3",
+        "name": "SuperFlix"
+    },
+    {
+        "iconUrl": "https://www.topfilmes.biz/assets/theme/red/favicon/favicon-128.png",
+        "jarFileSize": 55278,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/saimuelbr/saimuelrepo",
+        "fileSize": 13586,
+        "status": 1,
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "TopFilmes",
+        "jarUrl": "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/builds/TopFilmes.jar",
+        "url": "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/builds/TopFilmes.cs3",
+        "name": "TopFilmes"
+    },
+    {
+        "iconUrl": "https://ultracine.org/wp-content/uploads/2024/07/cropped-favicon-300x300.png",
+        "jarFileSize": 40466,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 10899,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "UltraCine",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/UltraCine.jar",
+        "description": "UltraCine - Filmes e S\u00e9ries",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/UltraCine.cs3",
+        "name": "UltraCine"
+    },
+    {
+        "iconUrl": "https://novizer.com/img/android-chrome-192x192.png",
+        "jarFileSize": 35893,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
+        "fileSize": 10142,
+        "status": 1,
+        "language": "pt-br",
+        "authors": [
+            "saimuelbr"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "Vizer",
+        "jarUrl": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/Vizer.jar",
+        "description": "Vizer - Filmes, S\u00e9ries, Animes",
+        "url": "https://raw.githubusercontent.com/euluan1912/cloudstream-brazil-providers/builds/Vizer.cs3",
+        "name": "Vizer"
+    }
+]
