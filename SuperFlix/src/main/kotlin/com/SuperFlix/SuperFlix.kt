@@ -5,11 +5,14 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
-import java.util.concurrent.TimeUnit // Necessário para o timeout em app.get()
+// Removida a importação de java.util.concurrent.TimeUnit
+
+// Necessário para executar funções suspend (como app.get) de forma síncrona
+import kotlinx.coroutines.runBlocking 
 
 class SuperFlix : MainAPI() {
-    // A URL PRINCIPAL NÃO É MAIS DECLARADA AQUI. Ela será resolvida dinamicamente no 'init'.
-    override lateinit var mainUrl: String // Deve ser 'lateinit var' pois será inicializada depois
+    
+    override lateinit var mainUrl: String 
     override var name = "SuperFlix"
     override val hasMainPage = true
     override var lang = "pt"
@@ -17,26 +20,27 @@ class SuperFlix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     init {
-        // Inicializa a URL com o domínio mais recente encontrado via Google Search
-        mainUrl = getWorkingDomain()
+        // Inicializa a URL chamando a função de busca dentro de um bloco síncrono
+        mainUrl = runBlocking {
+            getWorkingDomain()
+        }
     }
     
-    // --- FUNÇÃO DE BUSCA DE DOMÍNIO (Autônoma) ---
-    private fun getWorkingDomain(): String {
-        // Mantenha o último domínio conhecido como fallback seguro (mude para o ".hub" se necessário)
-        val fallbackDomain = "https://superflix.lat" 
+    // --- FUNÇÃO DE BUSCA DE DOMÍNIO (AGORA É SUSPEND) ---
+    // A função precisa ser 'suspend' pois chama app.get()
+    private suspend fun getWorkingDomain(): String {
+        // Mantenha o último domínio conhecido como fallback seguro (ajuste para .hub se for mais recente)
+        val fallbackDomain = "https://superflix.hub" 
         
         try {
-            // A query que deve sempre retornar o domínio mais recente
             val searchQuery = "SuperFlix assistir filmes"
-            
-            // URL de pesquisa do Google
             val searchUrl = "https://www.google.com/search?q=$searchQuery"
             
-            // Faz a requisição à página de resultados do Google com timeout de 5 segundos
-            val searchPage = app.get(searchUrl, timeout = 5, timeUnit = TimeUnit.SECONDS)
+            // Faz a requisição à página de resultados do Google.
+            // Timeout ajustado para 5000 milissegundos (5 segundos) e 'timeUnit' removido.
+            val searchPage = app.get(searchUrl, timeout = 5000)
             
-            // Procura pelo primeiro link que contenha "superflix" no link (href) e seja uma URL completa
+            // Procura o primeiro link que contenha "superflix" no link (href) e seja uma URL completa
             val linkElement = searchPage.document.select("a").firstOrNull { 
                 it.attr("href").contains("superflix") && it.attr("href").startsWith("http")
             }
@@ -55,7 +59,6 @@ class SuperFlix : MainAPI() {
             }
             
         } catch (e: Exception) {
-            // Se a busca falhar (ex: sem internet), usa o fallback
             println("Erro na busca dinâmica de domínio para SuperFlix: ${e.message}")
         }
         
@@ -87,7 +90,6 @@ class SuperFlix : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        // A busca usa a mainUrl resolvida dinamicamente
         val doc = app.get("$mainUrl/?s=$query").document
         return doc.select("article.post").mapNotNull { it.toSearchResponse() }
     }
@@ -139,7 +141,7 @@ class SuperFlix : MainAPI() {
                 source = name,
                 name = name,
                 url = src,
-                referer = mainUrl, // Garante que o referer usa a mainUrl dinâmica
+                referer = mainUrl,
                 quality = Qualities.Unknown.value,
                 type = ExtractorLinkType.M3U8
             ))
@@ -149,6 +151,7 @@ class SuperFlix : MainAPI() {
             val lang = it.attr("label").ifBlank { "Português" }
             val url = it.attr("src")
             if (url.isNotBlank()) {
+                // Use newSubtitleFile para evitar warnings de depreciação (Boa Prática!)
                 subtitleCallback(SubtitleFile(lang, url))
             }
         }
