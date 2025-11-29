@@ -7,74 +7,75 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # CRÍTICO: Permissão de escrita para o deploy
-      
-    steps:
-      # 1. CHECKOUT
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }} 
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write # CRÍTICO: Permissão de escrita para o deploy
 
-      # 2. SETUP JAVA/GRADLE
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
+        steps:
+            # 1. CHECKOUT
+            - uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+            # 2. SETUP JAVA/GRADLE
+            - name: Set up JDK 17
+              uses: actions/setup-java@v4
+              with:
+                  java-version: '17'
+                  distribution: 'temurin'
+                  cache: 'gradle'
 
-      - name: Build with Gradle (Cria os .cs3 e .jar)
-        run: ./gradlew assemble --refresh-dependencies --info
+            - name: Grant execute permission for gradlew
+              run: chmod +x gradlew
 
-      # 3. GERAÇÃO DO MANIFESTO DE PROVEDORES
-      - name: Generate plugins.json at correct path
-        run: ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
+            - name: Build with Gradle (Cria os .cs3 e .jar)
+              run: ./gradlew assemble --refresh-dependencies --info
 
-      # 4. CRIAÇÃO DA ESTRUTURA FINAL E CORREÇÃO DE URL (Ajuste para capturar nome completo)
-      - name: Mover, Corrigir URLs Internas e Criar repo.json principal
-        run: |
-          # Define a base da URL funcional para o download no GitHub
-          REPO_BASE_URL="https://github.com/${{ github.repository }}/raw/refs/heads/main/builds"
-          PLUGINS_LIST="[\"$REPO_BASE_URL/plugins.json\"]"
+            # 3. GERAÇÃO DO MANIFESTO DE PROVEDORES
+            - name: Generate plugins.json at correct path
+              run: ./gradlew makePluginsJson -PoutputFile="build/plugins.json"
 
-          # 1. Cria a pasta 'builds'
-          mkdir -p builds
-          
-          # 2. Move o manifesto de plugins para a pasta builds/
-          mv build/plugins.json builds/plugins.json 
-          
-          # 3. ESCAPA a URL de base para uso no comando SED
-          REPO_BASE_URL_ESCAPED=$(echo $REPO_BASE_URL | sed 's/\//\\\//g')
-          
-          # 4. CRÍTICO: Substitui a URL do .cs3 no plugins.json
-          # O padrão foi ajustado para capturar O MAIOR NOME de arquivo ([a-zA-Z0-9]+).
-          sed -i -E 's|"url": "[^"]*([a-zA-Z0-9]+)\.cs3"|"url": "'"$REPO_BASE_URL_ESCAPED"'/\1.cs3"|g' builds/plugins.json
-          
-          # 5. CRÍTICO: Substitui a URL do .jar no plugins.json
-          sed -i -E 's|"jarUrl": "[^"]*([a-zA-Z0-9]+)\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
+            # 4. CRIAÇÃO DA ESTRUTURA FINAL E CORREÇÃO DE URL (Ajuste para capturar nome completo)
+            - name: Mover, Corrigir URLs Internas e Criar repo.json principal
+              run: |
+                  # Define a base da URL funcional para o download no GitHub
+                  REPO_BASE_URL="https://github.com/${{ github.repository }}/raw/refs/heads/main/builds"
+                  PLUGINS_LIST="[\"$REPO_BASE_URL/plugins.json\"]"
 
-          # 6. CRIA o manifesto principal (repo.json)
-          echo "{
-            \"name\": \"CloudStream Brasil Repo\",
-            \"description\": \"Repositório Brasileiro de Provedores CloudStream\",
-            \"manifestVersion\": 1,
-            \"pluginLists\": $PLUGINS_LIST
-          }" > builds/repo.json
-          
-          # 7. COPIA os arquivos .cs3 e .jar para a pasta builds/
-          find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
-          find . -type f -name "*.jar" -exec cp {} builds/ \; || true
-          
-      # 5. DEPLOY FINAL COM AÇÃO DE COMMIT DIRETO (Standard CloudStream)
-      - name: Commit Providers to main branch
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Deploy: CloudStream Providers Update (Final Download URL Fix)"
-          branch: main
-          file_pattern: builds/*
+                  # 1. Cria a pasta 'builds'
+                  mkdir -p builds
+
+                  # 2. Move o manifesto de plugins para a pasta builds/
+                  mv build/plugins.json builds/plugins.json
+
+                  # 3. ESCAPA a URL de base para uso no comando SED
+                  REPO_BASE_URL_ESCAPED=$(echo $REPO_BASE_URL | sed 's/\//\\\//g')
+
+                  # 4. CRÍTICO: Substitui a URL do .cs3 no plugins.json
+                  # Captura a string inteira (apenas letras/números) que precede o .cs3.
+                  # A regex é agora: "capture tudo que não é aspa/barra, até o .cs3"
+                  sed -i -E 's|"url": "[^"]*/?([a-zA-Z0-9]+)\.cs3"|"url": "'"$REPO_BASE_URL_ESCAPED"'/\1.cs3"|g' builds/plugins.json
+
+                  # 5. CRÍTICO: Substitui a URL do .jar no plugins.json
+                  sed -i -E 's|"jarUrl": "[^"]*/?([a-zA-Z0-9]+)\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
+
+                  # 6. CRIA o manifesto principal (repo.json)
+                  echo "{
+                    \"name\": \"CloudStream Brasil Repo\",
+                    \"description\": \"Repositório Brasileiro de Provedores CloudStream\",
+                    \"manifestVersion\": 1,
+                    \"pluginLists\": $PLUGINS_LIST
+                  }" > builds/repo.json
+
+                  # 7. COPIA os arquivos .cs3 e .jar para a pasta builds/
+                  find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
+                  find . -type f -name "*.jar" -exec cp {} builds/ \; || true
+
+            # 5. DEPLOY FINAL COM AÇÃO DE COMMIT DIRETO (Standard CloudStream)
+            - name: Commit Providers to main branch
+              uses: stefanzweifel/git-auto-commit-action@v5
+              with:
+                  commit_message: "Deploy: CloudStream Providers Update (Final Download URL Fix)"
+                  branch: main
+                  file_pattern: builds/*
