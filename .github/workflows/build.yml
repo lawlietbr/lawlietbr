@@ -10,12 +10,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-     - uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }} # Adicionado para conceder permissão de escrita
+      # 1. CHECKOUT CORRIGIDO: Esta seção garante a permissão de escrita
+      - uses: actions/checkout@v4
+        with:
+          # ESSA LINHA É CRÍTICA: Dá permissão à Action para escrever no branch gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }} 
 
-
-      # 1. SETUP JAVA/GRADLE
+      # 2. SETUP JAVA/GRADLE
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,37 +27,34 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 2. BUILD E GERAÇÃO DOS ARQUIVOS
+      # 3. BUILD E GERAÇÃO DOS ARQUIVOS
       - name: Build with Gradle (Cria os .cs3)
         run: ./gradlew assemble --refresh-dependencies --info
 
       - name: Generate repository.json
         run: ./gradlew makePluginsJson
         
-      # 3. CRIAÇÃO DA ESTRUTURA FINAL (MOVER PARA BUILDS/)
+      # 4. CRIAÇÃO DA ESTRUTURA FINAL (MOVER PARA BUILDS/)
       - name: Mover e Renomear para Padrão de Repositório (builds/repo.json)
         run: |
           # 1. Cria a pasta 'builds' se ela ainda não existir
           mkdir -p builds
           # 2. Tenta mover o 'build/plugins.json' para 'builds/repo.json'
-          # O '|| true' garante que o workflow não pare se o arquivo não estiver exatamente lá
           mv build/plugins.json builds/repo.json || true
           
           # 3. Copia todos os .cs3 para a pasta builds/ para serem publicados
-          # Isso garante que todos os arquivos CS3 gerados estejam na pasta de deploy.
           find . -name "*.cs3" -exec cp {} builds/ \;
 
-      # 4. DEPLOY CRÍTICO (NOVA ETAPA)
+      # 5. DEPLOY CRÍTICO - Publica o conteúdo da pasta 'builds/'
       - name: Deploy Providers to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # CRÍTICO: Publica o CONTEÚDO da pasta 'builds/' para o branch 'gh-pages'
           publish_dir: ./builds
           publish_branch: gh-pages
           commit_message: "Deploy: Automatic CloudStream Providers Update"
 
-      # 5. UPLOAD ARTIFACT (OPCIONAL: Mantido para compatibilidade, mas não é usado no deploy)
+      # 6. UPLOAD ARTIFACT (Opcional)
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
