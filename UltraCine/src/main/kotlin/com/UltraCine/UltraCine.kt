@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.Actor
 import org.jsoup.nodes.Element
+import kotlin.math.roundToInt // Novo import necessário para a correção do score
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -38,7 +39,6 @@ class UltraCine : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        // Ajuste no seletor e na URL para corresponder ao novo layout
         val document = app.get(request.data + if (page > 1) "page/$page/" else "").document
         val home = document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
@@ -47,10 +47,9 @@ class UltraCine : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
+        val title = this.selectFirst("header.entry-header h1.entry-title")?.text() ?: return null
         val href = this.selectFirst("a.lnk-blk")?.attr("href") ?: return null
         
-        // Lógica de poster adaptada para pegar src ou data-src e otimizar URL
         val posterUrl = this.selectFirst("div.post-thumbnail figure img")?.let { img ->
             val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
             src?.let { url ->
@@ -70,7 +69,6 @@ class UltraCine : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val searchResponse = app.get("$mainUrl/?s=$query").document
-        // Seletor de busca também corrigido
         return searchResponse.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
         }
@@ -80,7 +78,6 @@ class UltraCine : MainAPI() {
         val document = app.get(url).document
         
         val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
-        // Poster e outras informações adaptadas ao novo layout
         val poster = document.selectFirst("div.bghd img.TPostBg")?.let { img ->
             val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
             src?.let { url ->
@@ -102,7 +99,6 @@ class UltraCine : MainAPI() {
             iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
         }
 
-        // URL do iframe interno que contém os players/episódios
         val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
         val iframeUrl = iframeElement?.let { iframe ->
             iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
@@ -112,18 +108,18 @@ class UltraCine : MainAPI() {
         
         return if (isSerie) {
             val episodes = if (iframeUrl != null) {
-                // Se for série, precisa acessar o iframe para pegar os dados dos episódios
                 val iframeDocument = app.get(iframeUrl).document
                 parseSeriesEpisodes(iframeDocument, iframeUrl)
             } else {
                 emptyList()
             }
-                
+            
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.rating = rating?.times(1000)?.toInt()
+                // CORRIGIDO: O campo 'rating' está obsoleto, use 'score' (0-100)
+                this.score = rating?.times(10)?.roundToInt()
                 this.tags = genres
                 if (actors != null) addActors(actors)
                 addTrailer(trailerUrl)
@@ -133,7 +129,8 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.rating = rating?.times(1000)?.toInt()
+                // CORRIGIDO: O campo 'rating' está obsoleto, use 'score' (0-100)
+                this.score = rating?.times(10)?.roundToInt()
                 this.tags = genres
                 this.duration = parseDuration(duration)
                 if (actors != null) addActors(actors)
@@ -162,9 +159,9 @@ class UltraCine : MainAPI() {
                         episodeTitle
                     }
                     
-                    Episode(
-                        // O ID do episódio é o dado que será passado para loadLinks
-                        data = episodeId, 
+                    // CORRIGIDO: O construtor Episode() está obsoleto, use newEpisode()
+                    newEpisode(
+                        data = episodeId,
                         name = cleanTitle,
                         season = seasonNumber,
                         episode = episodeNumber
@@ -183,26 +180,26 @@ class UltraCine : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        // Se `data` for o ID do episódio (para séries)
+        if (data.isBlank()) return false
+        
         if (data.matches(Regex("\\d+"))) {
             val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
             
             try {
                 val episodeDocument = app.get(episodeUrl).document
             
-                // Procura os botões de player que contêm os extratores EmbedPlay
                 val embedPlayButton = episodeDocument.selectFirst("button[data-source*='embedplay.upns.pro']") 
                     ?: episodeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
                 
                 if (embedPlayButton != null) {
                     val embedPlayLink = embedPlayButton.attr("data-source")
+                    
                     if (embedPlayLink.isNotBlank()) {
                         loadExtractor(embedPlayLink, episodeUrl, subtitleCallback, callback)
                         return true
                     }
                 }
                 
-                // Fallback para iframe de player único, caso exista
                 val singlePlayerIframe = episodeDocument.selectFirst("div.play-overlay div#player iframe")
                 if (singlePlayerIframe != null) {
                     val singlePlayerSrc = singlePlayerIframe.attr("src")
@@ -215,25 +212,22 @@ class UltraCine : MainAPI() {
                 e.printStackTrace()
             }
                 
-        // Se `data` for a URL do filme (para filmes)
         } else if (data.startsWith("http")) {
             try {
-                // Assume que a URL é a do iframe de player ou a URL do filme
                 val iframeDocument = app.get(data).document
             
-                // Procura os botões de player que contêm os extratores EmbedPlay
                 val embedPlayButton = iframeDocument.selectFirst("button[data-source*='embedplay.upns.pro']")
                     ?: iframeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
                 
                 if (embedPlayButton != null) {
                     val embedPlayLink = embedPlayButton.attr("data-source")
+                    
                     if (embedPlayLink.isNotBlank()) {
                         loadExtractor(embedPlayLink, data, subtitleCallback, callback)
                         return true
                     }
                 }
                 
-                // Fallback para iframe de player único, caso exista
                 val singlePlayerIframe = iframeDocument.selectFirst("div.play-overlay div#player iframe")
                 if (singlePlayerIframe != null) {
                     val singlePlayerSrc = singlePlayerIframe.attr("src")
