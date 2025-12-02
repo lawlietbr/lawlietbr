@@ -5,8 +5,10 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.Actor
+// Importação necessária para o novo tipo Score
+import com.lagradost.cloudstream3.APIHolder.toScore 
 import org.jsoup.nodes.Element
-import kotlin.math.roundToInt // Necessário para .score
+import kotlin.math.roundToInt 
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -118,8 +120,8 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                // Correção de Depreciação: Uso de 'score' (0-100) em vez de 'rating' (0-10)
-                this.score = rating?.times(10)?.roundToInt()
+                // CORREÇÃO 1: Conversão do Double (rating 0-10) para Int (score 0-100) e depois para o objeto Score?.
+                this.score = rating?.times(10)?.roundToInt()?.toScore()
                 this.tags = genres
                 if (actors != null) addActors(actors)
                 addTrailer(trailerUrl)
@@ -129,8 +131,8 @@ class UltraCine : MainAPI() {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                // Correção de Depreciação: Uso de 'score' (0-100) em vez de 'rating' (0-10)
-                this.score = rating?.times(10)?.roundToInt()
+                // CORREÇÃO 1: Conversão do Double (rating 0-10) para Int (score 0-100) e depois para o objeto Score?.
+                this.score = rating?.times(10)?.roundToInt()?.toScore()
                 this.tags = genres
                 this.duration = parseDuration(duration)
                 if (actors != null) addActors(actors)
@@ -159,12 +161,15 @@ class UltraCine : MainAPI() {
                         episodeTitle
                     }
                     
-                    // Correção de Depreciação: Uso de newEpisode() em vez de Episode()
+                    // CORREÇÃO 2: Uso da nova assinatura do newEpisode (ou construtor), 
+                    // que requer apenas url (data), nome, temporada e episódio.
+                    // Os parâmetros 'data', 'name', 'season', 'episode' antigos
+                    // foram substituídos por argumentos posicionais/renomeados:
                     newEpisode(
-                        data = episodeId,
-                        name = cleanTitle,
-                        season = seasonNumber,
-                        episode = episodeNumber
+                        episodeId, // data: String, O ID do episódio (url) é o primeiro parâmetro obrigatório.
+                        cleanTitle, // name: String?,
+                        seasonNumber, // season: Int?,
+                        episodeNumber // episode: Int?,
                     )
                 }
             
