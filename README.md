@@ -1,18 +1,52 @@
-<h1 align="center">Hi 👋, I'm saimuel</h1>
-<h3 align="center">> Extensão brasileira gratuita para CloudStream 3 com filmes, séries e animes — feita por mim e para a comunidade.</h3>
+<h1 align="center">Hi 👋, I'm Luan</h1>
+<h3 align="center">> Free Brazilian extension for CloudStream 3 — inspired by the community and constantly evolving.</h3>
+<h3 align="center">> Extensão brasileira gratuita para o CloudStream 3 — inspirada na comunidade e em constante evolução.</h3>
 
-<p>- 🔭 I’m currently working on <a href="https://github.com/saimuelbr/saimuelrepo">saimuelrepo</a></p>
-
-<p>- 🌱 I’m currently learning <b>Kotlin</b></p>
-
-<h3 align="left">Connect with me:</h3>
-<p align="left">
-<a href="https://discord.gg/yK2bTH4dDm" target="blank">
-<img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/discord.svg" alt="discord" height="30" width="40" />
-</a>
+<p align="center">
+🔥 Inspired by <a href="https://github.com/saimuelbr/saimuelrepo" target="_blank">saimuelrepo</a>  
 </p>
 
-<h3 align="left">Languages and Tools:</h3>
+---
+
+<h3>🚧 Project Status / Status do Projeto</h3>
+
+<p>
+<b>EN:</b> This repository is <b>still under development</b>. I am currently learning <b>Kotlin</b> and improving the structure little by little.<br>
+<b>PT-BR:</b> Este repositório ainda está <b>em desenvolvimento</b>. Atualmente estou aprendendo <b>Kotlin</b> e aprimorando a estrutura aos poucos.
+</p>
+
+---
+
+<h3>🎯 Purpose / Objetivo</h3>
+
+<p>
+<b>EN:</b><br>
+• Expand the number of Brazilian websites supported by CloudStream 3.<br>
+• Provide a free extension for the community.<br>
+• Index only publicly available content.<br>
+• Improve my Kotlin skills.<br>
+• Help strengthen the CloudStream plugin ecosystem.<br><br>
+
+<b>PT-BR:</b><br>
+• Expandir a quantidade de sites brasileiros suportados pelo CloudStream 3.<br>
+• Oferecer uma extensão gratuita para a comunidade.<br>
+• Indexar apenas conteúdo público disponível na internet.<br>
+• Aprimorar minhas habilidades em Kotlin.<br>
+• Ajudar a fortalecer o ecossistema de plugins do CloudStream.
+</p>
+
+---
+
+<h3>📦 What Are Providers? / O que são Providers?</h3>
+
+<p>
+<b>EN:</b> Providers are extensions that only <b>index</b> content already available on public websites — similar to how a browser works.<br>
+<b>PT-BR:</b> Providers são extensões que apenas <b>indexam</b> conteúdo já disponível em sites públicos — como um navegador comum.
+</p>
+
+---
+
+<h3 align="left">🛠️ Languages and Tools:</h3>
 <p align="left">
 <a href="https://developer.android.com" target="_blank" rel="noreferrer">
 <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/android/android-original-wordmark.svg" alt="android" width="40" height="40"/>
@@ -27,24 +61,68 @@
 
 ---
 
-<h3>📜 License</h3>
+<h3>📌 Connect with me / Contato</h3>
 <p>
-Este repositório está licenciado sob a <a href="https://opensource.org/license/mit-0" target="_blank"><b>MIT License</b></a>.<br>
-Você pode usar, copiar, modificar, mesclar, publicar e distribuir este código livremente, desde que mantenha os devidos créditos.
+<b>Discord:</b> (coming soon / em breve)
 </p>
 
-<h3>⚠️ Aviso Legal</h3>
+---
+
+<h3>📜 License / Licença (MIT)</h3>
 <p>
-• Eu <b>não hospedo</b> filmes, séries, animes ou qualquer outro tipo de conteúdo protegido por direitos autorais.<br>
-• Os plugins aqui disponibilizados apenas <b>indexam sites públicos</b> para uso no <b>CloudStream 3</b>.<br>
-• <b>Não assumo qualquer responsabilidade</b> sobre como terceiros utilizam este repositório. O uso é de inteira responsabilidade do usuário final.
+<b>EN:</b>  
+This repository is licensed under the <b>MIT License</b>.  
+You may use, copy, modify, merge, publish, and distribute this code as long as proper credits are maintained.<br><br>
+
+<b>PT-BR:</b>  
+Este repositório está licenciado sob a <b>Licença MIT</b>.<br>
+Você pode usar, copiar, modificar, mesclar, publicar e distribuir este código desde que mantenha os devidos créditos.
 </p>
 
-<h3>⚖️ Aviso DMCA</h3>
+---
+
+<h3>⚠️ Legal Disclaimer / Aviso Legal</h3>
 <p>
-Este projeto tem caráter meramente educacional e funciona de forma semelhante a um navegador comum, apenas buscando arquivos de vídeo disponíveis publicamente na internet.<br><br>
-Nenhum conteúdo é hospedado por este repositório ou pelo aplicativo CloudStream 3.<br>
-Qualquer conteúdo acessado é hospedado por sites de terceiros.<br>
-O uso é de total responsabilidade do usuário, que deve cumprir as leis locais.<br>
-Se você acredita que algum conteúdo viola direitos autorais, entre em contato diretamente com o provedor que hospeda os arquivos, e não com os desenvolvedores deste repositório ou do aplicativo CloudStream 3.
+<b>EN:</b><br>
+• I <b>do not host</b> movies, series, anime, or any copyrighted material.<br>
+• These plugins only <b>index publicly available links</b> for use in CloudStream 3.<br>
+• I am <b>not responsible</b> for how third parties use this repository.<br><br>
+
+<b>PT-BR:</b><br>
+• Eu <b>não hospedo</b> filmes, séries, animes ou conteúdo protegido por direitos autorais.<br>
+• Estes plugins apenas <b>indexam links públicos</b> para uso no CloudStream 3.<br>
+• <b>Não me responsabilizo</b> pelo uso deste repositório por terceiros.
+</p>
+
+---
+
+<h3>⚖️ DMCA Notice / Aviso DMCA</h3>
+<p>
+<b>EN:</b><br>
+This project is for <b>educational purposes only</b> and works similarly to a web browser, only fetching publicly available video links.<br>
+No content is hosted by this repository or CloudStream 3.<br>
+Any media is hosted by <b>third-party websites</b>.<br>
+If you believe any content violates copyright, contact the <b>host website</b>, not the developers.<br><br>
+
+<b>PT-BR:</b><br>
+Este projeto é apenas para <b>fins educacionais</b> e funciona como um navegador comum, apenas buscando links públicos.<br>
+Nenhum conteúdo é hospedado por este repositório ou pelo CloudStream 3.<br>
+Todo conteúdo é hospedado por <b>sites de terceiros</b>.<br>
+Se algum arquivo violar direitos autorais, entre em contato com o <b>site que hospeda</b> o conteúdo.
+</p>
+
+---
+
+<h3>🤝 Contributions / Contribuições</h3>
+<p>
+<b>EN:</b> Contributions are welcome! You may open issues or pull requests.<br>
+<b>PT-BR:</b> Contribuições são bem-vindas! Você pode abrir issues ou pull requests.
+</p>
+
+---
+
+<h3>🙌 Acknowledgements / Agradecimentos</h3>
+<p>
+<b>EN:</b> Special thanks to the CloudStream community and creators like Saimuel for the inspiration.<br>
+<b>PT-BR:</b> Agradecimentos especiais à comunidade CloudStream e a criadores como o Saimuel pela inspiração.
 </p>
