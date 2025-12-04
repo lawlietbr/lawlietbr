@@ -3,90 +3,92 @@ package com.UltraCine
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.network.WebViewResolver
+import org.jsoup.nodes.Element
 
 class UltraCine : MainAPI() {
-    override var name = "UltraCine"
-    override var lang = "pt"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val name = "UltraCine"
+    override val mainUrl = "https://ultracine.org"
+    override val lang = "pt-br"
     override val hasMainPage = true
-    override val hasQuickSearch = true
-
-    override val mainUrl = "https://ultracine.tv"
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Início",
-        "$mainUrl/filmes/" to "Filmes",
-        "$mainUrl/series/" to "Séries",
+        "$mainUrl/category/lancamentos/" to "Lançamentos",
+        "$mainUrl/category/acao/" to "Ação",
+        "$mainUrl/category/animacao/" to "Animação",
+        "$mainUrl/category/comedia/" to "Comédia",
+        "$mainUrl/category/drama/" to "Drama",
+        "$mainUrl/category/terror/" to "Terror",
+        "$mainUrl/category/ficcao-cientifica/" to "Ficção Científica",
+        "$mainUrl/category/thriller/" to "Thriller"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val doc = app.get(request.data + if (page > 1) "page/$page/" else "").document
-        val items = doc.select("article.item").mapNotNull {
-            val a = it.selectFirst("a") ?: return@mapNotNull null
-            val title = a.selectFirst(".title")?.text() ?: a.attr("title") ?: ""
-            val href = fixUrl(a.attr("href"))
-            val poster = a.selectFirst("img")?.attr("src") ?: a.selectFirst("img")?.attr("data-src")
-            val isMovie = it.hasClass("movies")
-            newHomePageItem(
-                name = title,
-                url = href,
-                posterUrl = poster,
-                type = if (isMovie) TvType.Movie else TvType.TvSeries
-            )
+        val url = if (page == 1) request.data else "${request.data}page/$page/"
+        val doc = app.get(url).document
+        val items = doc.select("ul.post-lst li").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, items)
+    }
+
+    private fun Element.toSearchResult(): SearchResponse? {
+        val a = selectFirst("a.lnk-blk") ?: return null
+        val title = a.selectFirst("h2")?.text() ?: a.attr("title")
+        val href = fixUrl(a.attr("href"))
+        val poster = selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: selectFirst("img")?.attr("data-src")
+
+        return newMovieSearchResponse(title, href, TvType.Movie) {
+            this.posterUrl = poster?.replace("/w500/", "/original/")
         }
-        return newHomepageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "\( mainUrl/?s= \){query.replace(" ", "+")}"
-        val doc = app.get(url).document
-        return doc.select("article.item").mapNotNull {
-            val a = it.selectFirst("a") ?: return@mapNotNull null
-            val title = a.selectFirst(".title")?.text() ?: ""
-            val href = fixUrl(a.attr("href"))
-            val poster = a.selectFirst("img")?.attr("src") ?: a.selectFirst("img")?.attr("data-src")
-            val isMovie = it.hasClass("movies")
-            if (isMovie) {
-                newMovieSearchResponse(title, href, TvType.Movie) {
-                    this.posterUrl = poster
-                }
-            } else {
-                newAnimeSearchResponse(title, href, TvType.TvSeries) {
-                    this.posterUrl = poster
-                }
-            }
-        }
+        val doc = app.get("$mainUrl/?s=$query").document
+        return doc.select("ul.post-lst li").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url).document
 
-        val title = doc.selectFirst(".data h1")?.text() ?: return null
-        val poster = doc.selectFirst(".poster img")?.attr("src")
-        val isMovie = doc.selectFirst(".sgeneros")?.text()?.contains("Filme") == true
+        val title = doc.selectFirst("h1.entry-title")?.text() ?: return null
+        val poster = doc.selectFirst("div.bghd img")?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: doc.selectFirst("div.bghd img")?.attr("data-src")
+        val year = doc.selectFirst("span.year")?.text()?.toIntOrNull()
+        val plot = doc.selectFirst("div.description p")?.text()
+        val tags = doc.select("span.genres a").map { it.text() }
 
-        if (isMovie) {
-            return newMovieLoadResponse(title, url, TvType.Movie, url) {
-                this.posterUrl = poster
+        val isSeries = url.contains("/serie/")
+        val playerIframe = doc.selectFirst("iframe[src*='player.ultracine.org'], iframe[src*='ultracine.org/player']")?.attr("src")
+
+        return if (isSeries && playerIframe != null) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, getEpisodes(playerIframe)) {
+                this.posterUrl = poster?.replace("/w1280/", "/original/")
+                this.year = year
+                this.plot = plot
+                this.tags = tags
             }
         } else {
-            val episodes = doc.select(".seasons .se-c").flatMap { season ->
-                val seasonNum = season.selectFirst(".title")?.text()?.replace(Regex("[^0-9]"), "")?.toIntOrNull() ?: 0
-                season.select(".episodios li").mapNotNull { ep ->
-                    val epNum = ep.selectFirst(".num")?.text()?.toIntOrNull() ?: return@mapNotNull null
-                    val epUrl = fixUrl(ep.selectFirst("a")?.attr("href") ?: return@mapNotNull null)
-                    newEpisode(epUrl) {
-                        this.name = "T$seasonNum:E$epNum"
-                        this.season = seasonNum
-                        this.episode = epNum
-                    }
-                }
-            }
-
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                this.posterUrl = poster
+            newMovieLoadResponse(title, url, TvType.Movie, playerIframe ?: url) {
+                this.posterUrl = poster?.replace("/w1280/", "/original/")
+                this.year = year
+                this.plot = plot
+                this.tags = tags
             }
         }
+    }
+
+    private suspend fun getEpisodes(playerUrl: String): List<Episode> {
+        val text = app.get(playerUrl, referer = mainUrl).text
+        return Regex("""\[\"(\d+)\",\s*(\d+),\s*(\d+)""").findAll(text).map {
+            val id = it.groupValues[1]
+            val season = it.groupValues[2].toInt()
+            val episode = it.groupValues[3].toInt()
+            newEpisode(id) {
+                this.season = season
+                this.episode = episode
+            }
+        }.toList()
     }
 
     override suspend fun loadLinks(
@@ -95,50 +97,14 @@ class UltraCine : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
-        doc.select(".player option").forEach { opt ->
-            val playerUrl = opt.attr("value")
-            if (playerUrl.isNotBlank() && playerUrl.contains("http")) {
-                loadExtractor(playerUrl, mainUrl, subtitleCallback, callback)
-            }
-        }
+        val id = if (data.startsWith("http")) {
+            data.substringAfterLast("/")
+        } else data
 
-        // WebView resolver para players embutidos
-        WebViewResolver(Regex(""".*player.*""")).resolveUsingWebView(app.get(data).text) { url ->
-            callback.invoke(
-                ExtractorLink(
-                    name,
-                    name,
-                    url,
-                    "",
-                    Qualities.Unknown.value,
-                    isM3u8 = url.contains(".m3u8")
-                )
-            )
-        }
+        // Novo player direto (filmes e episódios)
+        loadExtractor("https://embedplay.upns.pro/embed.php?id=$id", mainUrl, subtitleCallback, callback)
+        loadExtractor("https://embedplay.upn.one/embed.php?id=$id", mainUrl, subtitleCallback, callback)
 
         return true
-    }
-}
-
-class EmbedPlayExtractor : ExtractorApi() {
-    override val name = "EmbedPlay"
-    override val mainUrl = "https://embedplay.ultracine.tv"
-    override val requiresReferer = true
-
-    override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink> {
-        val response = app.get(url, referer = referer ?: mainUrl)
-        val regex = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""")
-        val m3u8 = regex.find(response.text)?.groupValues?.get(1) ?: return emptyList()
-        return listOf(
-            ExtractorLink(
-                name,
-                name,
-                m3u8,
-                referer ?: mainUrl,
-                Qualities.Unknown.value,
-                isM3u8 = true
-            )
-        )
     }
 }
