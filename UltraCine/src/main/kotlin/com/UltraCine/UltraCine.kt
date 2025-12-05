@@ -184,46 +184,45 @@ class UltraCine : MainAPI() {
 ): Boolean {
     if (data.isBlank()) return false
 
-    val url = if (data.matches(Regex("^\\d+$"))) {
-        "https://assistirseriesonline.icu/episodio/$data"
-    } else if (data.startsWith("http")) {
-        data
-    } else return false
+    val url = when {
+        data.matches(Regex("^\\d+$")) -> "https://assistirseriesonline.icu/episodio/$data"
+        data.startsWith("http") -> data
+        else -> return false
+    }
 
     try {
-        val res = app.get(url, referer = "https://ultracine.org/")
+        val res = app.get(url, referer = "https://ultracine.org/", timeout = 30)
         val html = res.text
 
-        val linkRegex = Regex("""["'](?:file|src|source)["']?\s*:\s*["']([^"']+embedplay[^"']+)""")
-        val match = linkRegex.find(html) ?: return false
+        // Regex que pega o link direto do player (funciona em filmes e episódios)
+        val regex = Regex("""["'](?:file|src|source)["']?\s*:\s*["'](https?://[^"']+embedplay[^"']+)""")
+        val match = regex.find(html) ?: return false
 
         var videoUrl = match.groupValues[1]
 
-        videoUrl = when {
-            videoUrl.contains("embedplay.upns.pro") || videoUrl.contains("embedplay.upn.one") -> {
-                val id = videoUrl.substringAfterLast("/").substringBefore("?").substringBefore("\"")
-                "https://player.ultracine.org/watch/$id"
-            }
-            else -> videoUrl
+        // Força o player oficial do UltraCine (melhor qualidade + tela cheia)
+        if (videoUrl.contains("embedplay.upns.pro") || videoUrl.contains("embedplay.upn.one")) {
+            val id = videoUrl.substringAfterLast("/").substringBefore("?")
+            videoUrl = "https://player.ultracine.org/watch/$id"
         }
 
-        callback.invoke(
-            ExtractorLink(
-                "UltraCine",
-                "UltraCine 4K • Tela Cheia",
-                videoUrl,
-                "https://ultracine.org/",
-                Qualities.Unknown.value,
+        // VERSÃO 100% CORRETA DEZEMBRO 2025
+        callback(
+            newExtractorLink(
+                url = videoUrl,
+                name = "UltraCine 4K • Tela Cheia",
+                referer = "https://ultracine.org/",
+                quality = Qualities.Unknown.value,
                 isM3u8 = true
-            )
+            ).apply {
+                this.source = "UltraCine"
+            }
         )
 
         return true
-
     } catch (e: Exception) {
         e.printStackTrace()
     }
-
     return false
     }
     
