@@ -349,5 +349,6 @@ private fun extractQualityFromUrl(url: String): Int {
         url.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
         url.contains("2160p", ignoreCase = true) -> Qualities.P2160.value
         else -> Qualities.Unknown.value
+        }
     }
 }
