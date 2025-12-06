@@ -77,7 +77,6 @@ class UltraCine : MainAPI() {
         val year = yearText?.toIntOrNull()
 
         val durationText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.ownText()
-        val ratingText = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
         val tags = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
 
@@ -95,8 +94,12 @@ class UltraCine : MainAPI() {
 
         return if (isSerie) {
             val episodes = if (iframeUrl != null) {
-                val iframeDoc = app.get(iframeUrl).document
-                parseSeriesEpisodes(iframeDoc)
+                try {
+                    val iframeDoc = app.get(iframeUrl).document
+                    parseSeriesEpisodes(iframeDoc)
+                } catch (e: Exception) {
+                    emptyList()
+                }
             } else emptyList()
 
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
@@ -105,8 +108,6 @@ class UltraCine : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.recommendations = null
-                ratingText?.let { 
-                    this.score = null
                 addActors(actors)
                 addTrailer(trailer)
             }
@@ -116,9 +117,7 @@ class UltraCine : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.duration = durationText?.let { parseDuration(it) }
-                ratingText?.let { 
-                    this.score = null
+                this.duration = parseDuration(durationText)
                 addActors(actors)
                 addTrailer(trailer)
             }
