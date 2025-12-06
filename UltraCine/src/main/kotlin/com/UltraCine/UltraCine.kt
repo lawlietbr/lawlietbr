@@ -5,7 +5,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
-import com.lagradost.cloudstream3.network.WebViewResolver
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -78,7 +77,7 @@ class UltraCine : MainAPI() {
         val year = yearText?.toIntOrNull()
 
         val durationText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.ownText()
-        val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
+        val ratingText = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
         val tags = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
 
@@ -106,7 +105,9 @@ class UltraCine : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.recommendations = null
-                rating?.let { this.rating = (it * 1000).toInt() }  // novo jeito de definir rating
+                ratingText?.let { 
+                    this.rating = Rating(it * 10)  // Converte para Rating object
+                }
                 addActors(actors)
                 addTrailer(trailer)
             }
@@ -117,7 +118,9 @@ class UltraCine : MainAPI() {
                 this.plot = plot
                 this.tags = tags
                 this.duration = durationText?.let { parseDuration(it) }
-                rating?.let { this.rating = (it * 1000).toInt() }
+                ratingText?.let { 
+                    this.rating = Rating(it * 10)  // Converte para Rating object
+                }
                 addActors(actors)
                 addTrailer(trailer)
             }
@@ -138,12 +141,11 @@ class UltraCine : MainAPI() {
                 val title = epEl.selectFirst("a")?.text() ?: "Episódio"
                 val epNum = title.substringBefore(" - ").toIntOrNull() ?: 1
 
-                Episode(
-                    data = epId,
-                    name = title.substringAfter(" - ").takeIf { it.isNotEmpty() } ?: title,
-                    season = seasonNum,
-                    episode = epNum
-                )
+                newEpisode(epId) {
+                    this.name = title.substringAfter(" - ").takeIf { it.isNotEmpty() } ?: title
+                    this.season = seasonNum
+                    this.episode = epNum
+                }
             }.also { episodes.addAll(it) }
         }
 
@@ -176,7 +178,7 @@ class UltraCine : MainAPI() {
             "https://assistirseriesonline.icu/episodio/$data"
         } else data
 
-        try {
+        return try {
             val res = app.get(realUrl)
             val doc = res.document
 
@@ -200,26 +202,11 @@ class UltraCine : MainAPI() {
                 }
             }
 
-            // Última tentativa: WebViewResolver para players protegidos
-            WebViewResolver(res.text).resolveUsingWebView(res.url) { link ->
-                if (link.contains("m3u8") || link.contains("mp4")) {
-                    callback.invoke(
-                        ExtractorLink(
-                            source = this.name,
-                            name = this.name,
-                            url = link,
-                            referer = realUrl,
-                            quality = Qualities.Unknown.value,
-                            isM3u8 = link.contains("m3u8")
-                        )
-                    )
-                }
-            }
-
+            // Se não encontrar nada
+            false
         } catch (e: Exception) {
             e.printStackTrace()
+            false
         }
-
-        return false
     }
 }
