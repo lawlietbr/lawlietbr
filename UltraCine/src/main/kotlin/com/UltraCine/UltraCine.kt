@@ -1,6 +1,3 @@
-// Código corrigido do UltraCine para Cloudstream 4+
-// Ajustado: urlEncode removido, Score.of usado, ExtractorLink atualizado, isM3u8 removido, referer corrigido.
-
 package com.UltraCine
 
 import com.lagradost.cloudstream3.*
@@ -14,12 +11,9 @@ class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
     override var name = "UltraCine"
     override val hasMainPage = true
-    override var lang = "pt-br"
+    override var lang = "pt"
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(
-        TvType.Movie,
-        TvType.TvSeries
-    )
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/category/lancamentos/" to "Lançamentos",
@@ -41,128 +35,110 @@ class UltraCine : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(request.data + if (page > 1) "page/$page/" else "").document
-        val home = document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
-            it.toSearchResult()
-        }
-        return newHomePageResponse(request.name, home)
+        val url = request.data + if (page > 1) "page/$page/" else ""
+        val doc = app.get(url).document
+        val items = doc.select("div.aa-cn ul.post-lst li").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, items)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
-        val href = this.selectFirst("a.lnk-blk")?.attr("href") ?: return null
+        val titleEl = selectFirst("h2.entry-title, h3") ?: return null
+        val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
+        val poster = selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank().not() }
+            ?: selectFirst("img")?.attr("data-src")
 
-        val posterUrl = this.selectFirst("div.post-thumbnail figure img")?.let { img ->
-            val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { url ->
-                val fullUrl = if (url.startsWith("//")) "https:$url" else url
-                fullUrl.replace("/w500/", "/original/")
-            }
-        }
+        val year = selectFirst("span.year")?.text()?.toIntOrNull()
 
-        val year = this.selectFirst("span.year")?.text()?.toIntOrNull()
-
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = posterUrl
+        return newMovieSearchResponse(titleEl.text(), href, TvType.Movie) {
+            this.posterUrl = poster?.let { fixUrl(it) }
             this.year = year
         }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        val searchResponse = app.get("$mainUrl/?s=$encoded").document
-        return searchResponse.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
-            it.toSearchResult()
-        }
+        val url = "\( mainUrl/?s= \){URLEncoder.encode(query, "UTF-8")}"
+        val doc = app.get(url).document
+        return doc.select("div.aa-cn ul.post-lst li").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+        val doc = app.get(url).document
 
-        val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
-        val poster = document.selectFirst("div.bghd img.TPostBg")?.let { img ->
-            val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
-            src?.let { url ->
-                val fullUrl = if (url.startsWith("//")) "https:$url" else url
-                fullUrl.replace("/w1280/", "/original/")
-            }
+        val title = doc.selectFirst("h1.entry-title")?.text() ?: return null
+        val poster = doc.selectFirst("div.bghd img, img.TPostBg")?.attr("src")
+            ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+
+        val yearText = doc.selectFirst("span.year")?.text()
+        val year = yearText?.replace(Regex("\\D"), "")?.toIntOrNull()
+
+        val durationText = doc.selectFirst("span.duration")?.text().orEmpty()
+        val duration = parseDuration(durationText)
+
+        val ratingText = doc.selectFirst("div.vote span.num, .rating span")?.text()
+        // ex: "8.5"
+        val rating = ratingText?.toDoubleOrNull()?.times(1000)?.toInt()                     // 8500
+
+        val plot = doc.selectFirst("div.description p, .sinopse")?.text()
+
+        val tags = doc.select("span.genres a, .category a").map { it.text() }
+
+        val actors = doc.select("ul.cast-lst a").mapNotNull {
+            val name = it.text().trim()
+            val image = it.selectFirst("img")?.attr("src")
+            if (name.isNotBlank()) Actor(name, image) else null
         }
 
-        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far">")?.toIntOrNull()
-        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far">")
-        val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
-        val plot = document.selectFirst("aside.fg1 div.description p")?.text()
-        val genres = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
+        val trailer = doc.selectFirst("div.video iframe, iframe[src*=youtube]")?.attr("src")
 
-        val actors = document.selectFirst("aside.fg1 ul.cast-lst p")?.select("a")?.map {
-            Actor(it.text(), it.attr("href"))
-        }
+        val playerIframe = doc.selectFirst("iframe[src*='assistirseriesonline'], iframe[src*='embed']")
+            ?.attr("src")?.takeIf { it.isNotBlank() }
 
-        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")
+        val isTvSeries = url.contains("/serie/") || doc.select("div.seasons").isNotEmpty()
 
-        val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
-        val iframeUrl = iframeElement?.attr("src")
+        return if (isTvSeries && playerIframe != null) {
+            // Série → vamos pegar episódios
+            val episodes = mutableListOf<Episode>()
+            try {
+                val iframeDoc = app.get(playerIframe).document
+                iframeDoc.select("li[data-episode-id]").forEach { ep ->
+                    val epId = ep.attr("data-episode-id")
+                    val name = ep.text().trim()
+                    val season = ep.parent()?.attr("data-season-number")?.toIntOrNull()
+                    val episode = name.substringBefore(" - ").toIntOrNull() ?: 1
 
-        val isSerie = url.contains("/serie/")
-
-        return if (isSerie) {
-            val episodes = iframeUrl?.let {
-                val iframeDocument = app.get(it).document
-                parseSeriesEpisodes(iframeDocument, it)
-            } ?: emptyList()
+                    if (epId.isNotBlank()) {
+                        episodes += Episode(
+                            data = epId,
+                            name = name.substringAfter(" - ").ifBlank { "Episódio $episode" },
+                            season = season,
+                            episode = episode
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
 
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = Score.of(rating?.times(1000)?.toInt() ?: 0)
-                this.tags = genres
-                actors?.let { addActors(it) }
-                addTrailer(trailerUrl)
+                this.tags = tags
+                this.score = rating?.let { Score.of(it) }
+                addActors(actors)
+                trailer?.let { addTrailer(it) }
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, iframeUrl ?: "") {
+            // Filme
+            newMovieLoadResponse(title, url, TvType.Movie, playerIframe ?: url) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = Score.of(rating?.times(1000)?.toInt() ?: 0)
-                this.tags = genres
-                this.duration = parseDuration(duration)
-                actors?.let { addActors(it) }
-                addTrailer(trailerUrl)
+                this.tags = tags
+                this.duration = duration
+                this.score = rating?.let { Score.of(it) }
+                addActors(actors)
+                trailer?.let { addTrailer(it) }
             }
         }
-    }
-
-    private suspend fun parseSeriesEpisodes(iframeDocument: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
-        val episodes = mutableListOf<Episode>()
-        val seasons = iframeDocument.select("header.header ul.header-navigation li")
-
-        for (seasonElement in seasons) {
-            val seasonNumber = seasonElement.attr("data-season-number").toIntOrNull() ?: continue
-            val seasonId = seasonElement.attr("data-season-id")
-
-            val seasonEpisodes = iframeDocument.select("li[data-season-id='$seasonId']")
-                .mapNotNull { episodeElement ->
-                    val episodeId = episodeElement.attr("data-episode-id")
-                    val episodeTitle = episodeElement.selectFirst("a")?.text() ?: return@mapNotNull null
-
-                    val episodeNumber = episodeTitle.substringBefore(" - ").toIntOrNull() ?: 1
-                    val cleanTitle = if (episodeTitle.contains(" - ")) {
-                        episodeTitle.substringAfter(" - ")
-                    } else episodeTitle
-
-                    newEpisode(episodeId) {
-                        this.name = cleanTitle
-                        this.season = seasonNumber
-                        this.episode = episodeNumber
-                    }
-                }
-
-            episodes.addAll(seasonEpisodes)
-        }
-
-        return episodes
     }
 
     override suspend fun loadLinks(
@@ -171,54 +147,60 @@ class UltraCine : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        if (data.isBlank()) return false
+        // data pode ser URL do iframe ou ID do episódio
+        val link = if (data.matches(Regex("^\\d+$"))) {
+            "https://assistirseriesonline.icu/episodio/$data/"
+        } else {
+            data
+        }
 
-        suspend fun sendLink(url: String): Boolean {
-            callback(
-                ExtractorLink(
-                    source = "UltraCine",
-                    name = "UltraCine 4K • Tela Cheia",
-                    url = url,
-                    referer = mainUrl,
-                    quality = Qualities.Unknown,
-                    type = ExtractorLinkType.VIDEO
+        try {
+            val doc = app.get(link, referer = mainUrl).document
+
+            // 1. EmbedPlay direto
+            doc.select("button[data-source]").forEach {
+                val src = it.attr("data-source")
+                if (src.isNotBlank() && src.contains("embedplay")) {
+                    callback.invoke(
+                        ExtractorLink(
+                            source = name,
+                            name = "$name • 4K",
+                            url = src,
+                            referer = link,
+                            quality = Qualities.Unknown.value,
+                            type = ExtractorLinkType.VIDEO
+                        )
+                    )
+                }
+            }
+
+            // 2. iframe dentro do player
+            doc.select("iframe").forEach { iframe ->
+                val src = iframe.attr("src")
+                if (src.isBlank() || !src.startsWith("http")) return@forEach
+
+                callback.invoke(
+                    ExtractorLink(
+                        source = name,
+                        name = name,
+                        url = src,
+                        referer = link,
+                        quality = Qualities.Unknown.value,
+                        type = ExtractorLinkType.VIDEO
+                    )
                 )
-            )
-            return true
-        }
-
-        suspend fun handleDocument(document: org.jsoup.nodes.Document): Boolean {
-            val embedPlay = document.selectFirst("button[data-source*='embedplay']")?.attr("data-source")
-            if (!embedPlay.isNullOrBlank()) return sendLink(embedPlay)
-
-            val iframe = document.selectFirst("div.play-overlay div#player iframe")?.attr("src")
-            if (!iframe.isNullOrBlank()) return sendLink(iframe)
-
-            return false
-        }
-
-        return try {
-            if (data.matches(Regex("\\d+"))) {
-                val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
-                val doc = app.get(episodeUrl).document
-                handleDocument(doc)
-            } else {
-                val doc = app.get(data).document
-                handleDocument(doc)
             }
         } catch (e: Exception) {
-            false
+            e.printStackTrace()
         }
+
+        return true
     }
 
-    private fun parseDuration(duration: String?): Int? {
-        if (duration == null) return null
-        val regex = Regex("(\\d+)h\\s*(\\d+)m")
-        val match = regex.find(duration)
-        return if (match != null) {
-            val h = match.groupValues[1].toIntOrNull() ?: 0
-            val m = match.groupValues[2].toIntOrNull() ?: 0
-            h * 60 + m
-        } else Regex("(\\d+)m").find(duration)?.groupValues?.get(1)?.toIntOrNull()
+    private fun parseDuration(text: String): Int? {
+        if (text.isBlank()) return null
+        val h = Regex("(\\d+)h").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val m = Regex("(\\d+)m").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        return if (h > 0 || m > 0) h * 60 + m else null
     }
 }
