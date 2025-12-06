@@ -1,3 +1,6 @@
+// Código corrigido do UltraCine para Cloudstream 4+
+// Ajustado: urlEncode removido, Score.of usado, ExtractorLink atualizado, isM3u8 removido, referer corrigido.
+
 package com.UltraCine
 
 import com.lagradost.cloudstream3.*
@@ -5,6 +8,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -65,7 +69,8 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchResponse = app.get("$mainUrl/?s=${query.urlEncode()}").document
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val searchResponse = app.get("$mainUrl/?s=$encoded").document
         return searchResponse.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
             it.toSearchResult()
         }
@@ -82,8 +87,9 @@ class UltraCine : MainAPI() {
                 fullUrl.replace("/w1280/", "/original/")
             }
         }
-        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far\">")?.toIntOrNull()
-        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far\">")
+
+        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far">")?.toIntOrNull()
+        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far">")
         val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull()
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
         val genres = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
@@ -92,51 +98,37 @@ class UltraCine : MainAPI() {
             Actor(it.text(), it.attr("href"))
         }
 
-        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.let { iframe ->
-            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
-        }
+        val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")
 
         val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
-        val iframeUrl = iframeElement?.let { iframe ->
-            iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
-        }
+        val iframeUrl = iframeElement?.attr("src")
 
         val isSerie = url.contains("/serie/")
 
         return if (isSerie) {
-            if (iframeUrl != null) {
-                val iframeDocument = app.get(iframeUrl).document
-                val episodes = parseSeriesEpisodes(iframeDocument, iframeUrl)
+            val episodes = iframeUrl?.let {
+                val iframeDocument = app.get(it).document
+                parseSeriesEpisodes(iframeDocument, it)
+            } ?: emptyList()
 
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    this.score = com.lagradost.cloudstream3.Score(rating?.times(1000)?.toInt())
-                    this.tags = genres
-                    if (actors != null) addActors(actors)
-                    addTrailer(trailerUrl)
-                }
-            } else {
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, emptyList()) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    this.score = com.lagradost.cloudstream3.Score(rating?.times(1000)?.toInt())
-                    this.tags = genres
-                    if (actors != null) addActors(actors)
-                    addTrailer(trailerUrl)
-                }
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.year = year
+                this.plot = plot
+                this.score = Score.of(rating?.times(1000)?.toInt() ?: 0)
+                this.tags = genres
+                actors?.let { addActors(it) }
+                addTrailer(trailerUrl)
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, iframeUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                this.score = com.lagradost.cloudstream3.Score(rating?.times(1000)?.toInt())
+                this.score = Score.of(rating?.times(1000)?.toInt() ?: 0)
                 this.tags = genres
                 this.duration = parseDuration(duration)
-                if (actors != null) addActors(actors)
+                actors?.let { addActors(it) }
                 addTrailer(trailerUrl)
             }
         }
@@ -158,9 +150,7 @@ class UltraCine : MainAPI() {
                     val episodeNumber = episodeTitle.substringBefore(" - ").toIntOrNull() ?: 1
                     val cleanTitle = if (episodeTitle.contains(" - ")) {
                         episodeTitle.substringAfter(" - ")
-                    } else {
-                        episodeTitle
-                    }
+                    } else episodeTitle
 
                     newEpisode(episodeId) {
                         this.name = cleanTitle
@@ -183,112 +173,52 @@ class UltraCine : MainAPI() {
     ): Boolean {
         if (data.isBlank()) return false
 
-        if (data.matches(Regex("\\d+"))) {
-            val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
-
-            try {
-                val episodeDocument = app.get(episodeUrl).document
-
-                val embedPlayButton = episodeDocument.selectFirst("button[data-source*='embedplay.upns.pro']")
-                    ?: episodeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
-
-                if (embedPlayButton != null) {
-                    val embedPlayLink = embedPlayButton.attr("data-source")
-
-                    if (embedPlayLink.isNotBlank()) {
-                        callback(
-                            newExtractorLink(
-                                "UltraCine",
-                                "UltraCine 4K • Tela Cheia",
-                                embedPlayLink,
-                                "https://ultracine.org/",
-                                isM3u8 = true
-                            )
-                        )
-                        return true
-                    }
-                }
-
-                val singlePlayerIframe = episodeDocument.selectFirst("div.play-overlay div#player iframe")
-                if (singlePlayerIframe != null) {
-                    val singlePlayerSrc = singlePlayerIframe.attr("src")
-                    if (singlePlayerSrc.isNotBlank()) {
-                        callback(
-                            newExtractorLink(
-                                "UltraCine",
-                                "UltraCine 4K • Tela Cheia",
-                                singlePlayerSrc,
-                                "https://ultracine.org/",
-                                isM3u8 = true
-                            )
-                        )
-                        return true
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-        } else if (data.startsWith("http")) {
-            try {
-                val iframeDocument = app.get(data).document
-
-                val embedPlayButton = iframeDocument.selectFirst("button[data-source*='embedplay.upns.pro']")
-                    ?: iframeDocument.selectFirst("button[data-source*='embedplay.upn.one']")
-
-                if (embedPlayButton != null) {
-                    val embedPlayLink = embedPlayButton.attr("data-source")
-
-                    if (embedPlayLink.isNotBlank()) {
-                        callback(
-                            newExtractorLink(
-                                "UltraCine",
-                                "UltraCine 4K • Tela Cheia",
-                                embedPlayLink,
-                                "https://ultracine.org/",
-                                isM3u8 = true
-                            )
-                        )
-                        return true
-                    }
-                }
-
-                val singlePlayerIframe = iframeDocument.selectFirst("div.play-overlay div#player iframe")
-                if (singlePlayerIframe != null) {
-                    val singlePlayerSrc = singlePlayerIframe.attr("src")
-                    if (singlePlayerSrc.isNotBlank()) {
-                        callback(
-                            newExtractorLink(
-                                "UltraCine",
-                                "UltraCine 4K • Tela Cheia",
-                                singlePlayerSrc,
-                                "https://ultracine.org/",
-                                isM3u8 = true
-                            )
-                        )
-                        return true
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        suspend fun sendLink(url: String): Boolean {
+            callback(
+                ExtractorLink(
+                    source = "UltraCine",
+                    name = "UltraCine 4K • Tela Cheia",
+                    url = url,
+                    referer = mainUrl,
+                    quality = Qualities.Unknown,
+                    type = ExtractorLinkType.VIDEO
+                )
+            )
+            return true
         }
 
-        return false
+        suspend fun handleDocument(document: org.jsoup.nodes.Document): Boolean {
+            val embedPlay = document.selectFirst("button[data-source*='embedplay']")?.attr("data-source")
+            if (!embedPlay.isNullOrBlank()) return sendLink(embedPlay)
+
+            val iframe = document.selectFirst("div.play-overlay div#player iframe")?.attr("src")
+            if (!iframe.isNullOrBlank()) return sendLink(iframe)
+
+            return false
+        }
+
+        return try {
+            if (data.matches(Regex("\\d+"))) {
+                val episodeUrl = "https://assistirseriesonline.icu/episodio/$data"
+                val doc = app.get(episodeUrl).document
+                handleDocument(doc)
+            } else {
+                val doc = app.get(data).document
+                handleDocument(doc)
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun parseDuration(duration: String?): Int? {
         if (duration == null) return null
         val regex = Regex("(\\d+)h\\s*(\\d+)m")
-        val matchResult = regex.find(duration)
-        return if (matchResult != null) {
-            val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
-            val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
-            hours * 60 + minutes
-        } else {
-            val minutesRegex = Regex("(\\d+)m")
-            val minutesMatch = minutesRegex.find(duration)
-            minutesMatch?.groupValues?.get(1)?.toIntOrNull()
-        }
+        val match = regex.find(duration)
+        return if (match != null) {
+            val h = match.groupValues[1].toIntOrNull() ?: 0
+            val m = match.groupValues[2].toIntOrNull() ?: 0
+            h * 60 + m
+        } else Regex("(\\d+)m").find(duration)?.groupValues?.get(1)?.toIntOrNull()
     }
 }
