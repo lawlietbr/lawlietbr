@@ -62,28 +62,44 @@ class UltraCine : MainAPI() {
     }
 // ... (dentro da classe UltraCine)
 
+// ... (dentro da classe UltraCine)
+
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
         
-        // ... (Extração de metadados como title, poster, year, plot, tags, actors, trailerUrl permanece) ...
+        // 1. EXTRAÇÃO DE METADADOS (TUDO NA PARTE SUPERIOR)
         
         val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
-        // ... (variáveis poster, year, duration, rating, plot, genres, actors, trailerUrl) ...
-
-        val duration = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far\">")
-        val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull() // Mantido
         
-        // CORREÇÃO: Usamos o seletor da versão nova, pois a versão antiga é muito específica
-        val actors = document.select("ul.cast-lst a").mapNotNull { 
-            val name = it.text().trim()
-            val img = it.selectFirst("img")?.attr("src")
-            if (name.isNotBlank()) Actor(name, img) else null
+        // Extrai o poster e limpa a URL se necessário (melhorando o seletor original)
+        val poster = document.selectFirst("div.bghd img.TPostBg, div.bghd img")?.let { img ->
+            val src = img.attr("src").takeIf { it.isNotBlank() } ?: img.attr("data-src")
+            src?.let { url ->
+                val fullUrl = if (url.startsWith("//")) "https:$url" else url
+                fullUrl.replace("/w1280/", "/original/")
+            }
         }
+        
+        // Extração de outras variáveis
+        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.text()?.substringAfter("far\">")?.toIntOrNull()
+        val durationText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.text()?.substringAfter("far\">")
+        // O rating original da página (ex: 8.5)
+        val rating = document.selectFirst("div.vote-cn span.vote span.num")?.text()?.toDoubleOrNull() 
+        val plot = document.selectFirst("aside.fg1 div.description p")?.text()
+        // Variável genres (anteriormente tags)
+        val genres = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
+        
+        // Variável actors
+        val actors = document.selectFirst("aside.fg1 ul.cast-lst p")?.select("a")?.mapNotNull { 
+            val name = it.text().trim()
+            if (name.isNotBlank()) Actor(name, null) else null // Não há link ou imagem fácil para o ator aqui
+        } ?: emptyList() // Retorna lista vazia se nada for encontrado
         
         val trailerUrl = document.selectFirst("div.mdl-cn div.video iframe")?.let { iframe ->
             iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
         }
 
+        // Variáveis de Iframe/Player
         val iframeElement = document.selectFirst("iframe[src*='assistirseriesonline']")
         val iframeUrl = iframeElement?.let { iframe ->
             iframe.attr("src").takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
@@ -91,51 +107,48 @@ class UltraCine : MainAPI() {
 
         val isSerie = url.contains("/serie/")
         
+        // 2. RETORNO PARA SÉRIE OU FILME
+        
         return if (isSerie) {
-            if (iframeUrl != null) {
+            
+            // Variável episodes declarada antes de ser usada
+            val episodes = if (iframeUrl != null) {
+                // Se iframe for encontrado, tenta extrair episódios dele
                 val iframeDocument = app.get(iframeUrl).document
-                val episodes = parseSeriesEpisodes(iframeDocument, iframeUrl)
-                
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    // CORREÇÃO DE TIPO DE DADO
-                    this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
-                    this.tags = genres
-                    addActors(actors)
-                    addTrailer(trailerUrl)
-                }
+                parseSeriesEpisodes(iframeDocument, iframeUrl)
             } else {
-                // Caso não encontre o iframe do player, retorna sem episódios (Em Breve)
-                newTvSeriesLoadResponse(title, url, TvType.TvSeries, emptyList()) {
-                    this.posterUrl = poster
-                    this.year = year
-                    this.plot = plot
-                    // CORREÇÃO DE TIPO DE DADO
-                    this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
-                    this.tags = genres
-                    addActors(actors)
-                    addTrailer(trailerUrl)
-                }
+                emptyList()
             }
+            
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.year = year
+                this.plot = plot
+                // CORREÇÃO: Usa o construtor público Score(it, null)
+                this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) } 
+                this.tags = genres
+                addActors(actors)
+                trailerUrl?.let { addTrailer(it) } // Usa trailerUrl em vez de trailer
+            }
+
         } else {
-            // Filmes
+            
+            // Filmes - A DATA é o iframeUrl (ou string vazia se for null)
             newMovieLoadResponse(title, url, TvType.Movie, iframeUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
-                // CORREÇÃO DE TIPO DE DADO
-                this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) }
+                // CORREÇÃO: Usa o construtor público Score(it, null)
+                this.score = rating?.times(1000)?.toInt()?.let { Score(it, null) } 
                 this.tags = genres
-                this.duration = parseDuration(duration)
+                this.duration = parseDuration(durationText) // Usa durationText
                 addActors(actors)
-                addTrailer(trailerUrl)
+                trailerUrl?.let { addTrailer(it) } // Usa trailerUrl em vez de trailer
             }
         }
     }
 
-    // Função de extração de episódios copiada do código fornecido
+    // Função auxiliar para parsing de episódios, deve estar dentro da classe UltraCine
     private suspend fun parseSeriesEpisodes(iframeDocument: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
         val episodes = mutableListOf<Episode>()
         val seasons = iframeDocument.select("header.header ul.header-navigation li")
@@ -144,6 +157,7 @@ class UltraCine : MainAPI() {
             val seasonNumber = seasonElement.attr("data-season-number").toIntOrNull() ?: continue
             val seasonId = seasonElement.attr("data-season-id")
             
+            // Seletor corrigido para pegar episódios associados ao seasonId
             val seasonEpisodes = iframeDocument.select("li[data-season-id='$seasonId']")
                 .mapNotNull { episodeElement ->
                     val episodeId = episodeElement.attr("data-episode-id")
@@ -156,13 +170,12 @@ class UltraCine : MainAPI() {
                         episodeTitle
                     }
                     
-                    Episode(
-                        // CORREÇÃO: Passa o ID do episódio (que será usado no loadLinks)
-                        data = episodeId, 
-                        name = cleanTitle,
-                        season = seasonNumber,
-                        episode = episodeNumber
-                    )
+                    // Usa newEpisode (CORRIGE DEPRECATION)
+                    newEpisode(episodeId) {
+                        this.name = cleanTitle
+                        this.season = seasonNumber
+                        this.episode = episodeNumber
+                    }
                 }
             
             episodes.addAll(seasonEpisodes)
@@ -171,55 +184,8 @@ class UltraCine : MainAPI() {
         return episodes
     }
     
-// ... (O restante da classe loadLinks e parseDuration vêm abaixo)
-
+    // ... (loadLinks e parseDuration devem seguir a última versão que te enviei, garantindo que estejam DENTRO da classe UltraCine)
     
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-
-            } else {
-                // 2. FALLBACK: PROCURA A LISTA DE EPISÓDIOS NA PÁGINA PRINCIPAL
-                doc.select("div.seasons ul li a[href*='/episodio/']").forEach { epLink ->
-                    val href = epLink.attr("href") // Link completo (DATA)
-                    val epTitle = epLink.text().trim()
-
-                    if (href.isNotBlank()) {
-                         episodes += newEpisode(href) { 
-                            this.name = epTitle
-                        }
-                    }
-                }
-            }
-
-            // Retorno da SÉRIE (CORRIGE Score)
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                this.posterUrl = poster
-                this.year = year
-                this.plot = plot
-                this.tags = tags
-                // CORREÇÃO: Usa 'Score(it, null)' que é o construtor público.
-                this.score = null
-                addActors(actors)
-                trailer?.let { addTrailer(it) }
-            }
-        } else {
-            // FLUXO DE FILMES (CORRIGE Score)
-            newMovieLoadResponse(title, url, TvType.Movie, playerLinkFromButton ?: url) { 
-                this.posterUrl = poster
-                this.year = year
-                this.plot = plot
-                this.tags = tags
-                this.duration = duration
-                // CORREÇÃO: Usa 'Score(it, null)' que é o construtor público.
-                this.score = null 
-                addActors(actors)
-                trailer?.let { addTrailer(it) }
-            }
-        }
-    } 
-
     // --- O BLOCO loadLinks E AS FUNÇÕES AUXILIARES DEVEM ESTAR DENTRO DA CLASSE ---
     
     // ... (dentro da classe UltraCine, após a função load)
