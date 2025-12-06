@@ -90,8 +90,8 @@ class UltraCine : MainAPI() {
 
         val trailer = doc.selectFirst("div.video iframe, iframe[src*=youtube]")?.attr("src")
 
-        val playerIframe = doc.selectFirst("iframe[src*='assistirseriesonline'], iframe[src*='embedplay']")
-            ?.attr("src")?.takeIf { it.isNotBlank() }
+        val playerLinkFromButton = doc.selectFirst("div#players button[data-source]")
+    ?.attr("data-source")?.takeIf { it.isNotBlank() }
 
         val isTvSeries = url.contains("/serie/") || doc.select("div.seasons").isNotEmpty()
 
