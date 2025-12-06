@@ -6,6 +6,8 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
+import com.lagradost.cloudstream3.utils.Extensions.newScore
+
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
