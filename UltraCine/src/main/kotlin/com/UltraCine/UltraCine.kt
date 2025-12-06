@@ -172,87 +172,147 @@ class UltraCine : MainAPI() {
     if (data.isBlank()) return false
 
     return try {
-        // 1. CONSTRÓI A URL CORRETA
+        // DETERMINA A URL FINAL
         val finalUrl = when {
-            // É apenas números (ID do episódio)
+            // ID numérico (série)
             data.matches(Regex("^\\d+$")) -> {
                 "https://assistirseriesonline.icu/episodio/$data"
             }
-            // Já é uma URL completa
+            // URL do ultracine com ID
+            data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> {
+                val id = data.substringAfterLast("/")
+                "https://assistirseriesonline.icu/episodio/$id"
+            }
+            // URL normal
             else -> data
         }
 
-        val res = app.get(finalUrl, referer = mainUrl)
+        // FAZ A REQUISIÇÃO
+        val res = app.get(finalUrl, referer = mainUrl, timeout = 30)
         val html = res.text
         
-        // 2. DETECTOR UNIVERSAL DE LINKS DE VÍDEO
-        // Funciona para FILMES e SÉRIES
+        // ========== DETECTOR ESPECÍFICO PARA JW PLAYER ==========
+        // O padrão EXATO que você viu:
+        // src="https://storage.googleapis.com/mediastorage/...mp4#mp4/chunk/..."
         
-        val videoUrls = mutableSetOf<String>()
+        // 1. Procura por elementos <video> do JW Player
+        val jwPlayerPattern = Regex("""<video[^>]+class=["'][^"']*jw[^"']*["'][^>]+src=["'](https?://[^"']+)["']""")
+        val jwMatches = jwPlayerPattern.findAll(html).toList()
         
-        // Padrões que pegam QUALQUER link de vídeo:
-        val patterns = listOf(
-            // MP4 com qualquer parâmetro
-            Regex("""https?://[^"'<> ]+\.mp4(?:[#?][^"'<> ]*)?"""),
-            // M3U8 com qualquer parâmetro
-            Regex("""https?://[^"'<> ]+\.m3u8(?:[#?][^"'<> ]*)?"""),
-            // Google Storage (comum em séries)
-            Regex("""https?://storage\.googleapis\.com/[^"'<> ]+\.(?:mp4|m3u8)"""),
-            // URLs com qualidade no path
-            Regex("""https?://[^"'<> ]+/(?:360|480|720|1080)p?/[^"'<> ]+\.(?:mp4|m3u8)""")
-        )
-        
-        // Procura TODOS os padrões
-        for (pattern in patterns) {
-            val matches = pattern.findAll(html)
-            for (match in matches) {
-                val videoUrl = match.value
-                // Filtra URLs inválidas
-                if (videoUrl.isNotBlank() && 
-                    !videoUrl.contains("banner") && 
-                    !videoUrl.contains("ads") &&
-                    !videoUrl.contains("promo") &&
-                    videoUrl.length > 30) {
-                    videoUrls.add(videoUrl)
+        if (jwMatches.isNotEmpty()) {
+            jwMatches.forEach { match ->
+                val videoUrl = match.groupValues[1]
+                if (videoUrl.contains(".mp4") && videoUrl.contains("storage.googleapis.com")) {
+                    // ENCONTROU O VÍDEO DIRETO!
+                    val quality = extractQualityFromUrl(videoUrl)
+                    val isM3u8 = videoUrl.contains(".m3u8")
+                    
+                    @Suppress("DEPRECATION")
+                    val link = ExtractorLink(
+                        source = this.name,
+                        name = "${this.name} (${if (quality != Qualities.Unknown.value) "${quality}p" else "Direct"})",
+                        url = videoUrl,
+                        referer = finalUrl,
+                        quality = quality,
+                        isM3u8 = isM3u8
+                    )
+                    callback.invoke(link)
+                    return true
                 }
             }
         }
         
-        // 3. SE ENCONTROU LINKS DIRETOS DE VÍDEO
-        if (videoUrls.isNotEmpty()) {
-            videoUrls.forEach { videoUrl ->
-                val isM3u8 = videoUrl.contains(".m3u8")
-                val quality = extractQualityFromUrl(videoUrl)
-                
-                // Usa newExtractorLink (como já funciona)
-                val link = newExtractorLink(
-                    source = this.name,
-                    name = "${this.name}${if (quality != Qualities.Unknown.value) " ($quality" + "p)" else ""}",
-                    url = videoUrl
-                )
-                callback.invoke(link)
-            }
-            return true
-        }
+        // 2. Procura por links do Google Storage (fallback)
+        val googleStoragePattern = Regex("""https?://storage\.googleapis\.com/[^"'\s<>]+\.mp4[^"'\s<>]*""")
+        val googleMatches = googleStoragePattern.findAll(html).toList()
         
-        // 4. SE NÃO ENCONTROU LINKS DIRETOS, TENTA A ESTRATÉGIA ANTIGA
-        // (Essa parte JÁ FUNCIONA para filmes!)
-        
-        val doc = res.document
-        
-        // A. Tenta iframes (como EmbedPlay)
-        doc.select("iframe[src]").forEach { iframe ->
-            val src = iframe.attr("src")
-            if (src.isNotBlank() && loadExtractor(src, finalUrl, subtitleCallback, callback)) {
-                return true
+        if (googleMatches.isNotEmpty()) {
+            googleMatches.forEach { match ->
+                val videoUrl = match.value
+                if (videoUrl.isNotBlank() && !videoUrl.contains("banner")) {
+                    val quality = extractQualityFromUrl(videoUrl)
+                    
+                    @Suppress("DEPRECATION")
+                    val link = ExtractorLink(
+                        source = this.name,
+                        name = "${this.name} (${if (quality != Qualities.Unknown.value) "${quality}p" else "Google"})",
+                        url = videoUrl,
+                        referer = finalUrl,
+                        quality = quality,
+                        isM3u8 = false
+                    )
+                    callback.invoke(link)
+                    return true
+                }
             }
         }
         
-        // B. Tenta botões com data-source
-        doc.select("button[data-source]").forEach { button ->
-            val source = button.attr("data-source")
-            if (source.isNotBlank() && loadExtractor(source, finalUrl, subtitleCallback, callback)) {
-                return true
+        // 3. Procura por padrão genérico de MP4 no JW Player
+        val mp4Pattern = Regex("""src=["'](https?://[^"']+\.mp4(?:#mp4/chunk/[^"']*)?)["']""")
+        val mp4Matches = mp4Pattern.findAll(html).toList()
+        
+        if (mp4Matches.isNotEmpty()) {
+            mp4Matches.forEach { match ->
+                val videoUrl = match.groupValues[1]
+                if (videoUrl.isNotBlank() && !videoUrl.contains("banner")) {
+                    val quality = extractQualityFromUrl(videoUrl)
+                    
+                    @Suppress("DEPRECATION")
+                    val link = ExtractorLink(
+                        source = this.name,
+                        name = "${this.name} (${if (quality != Qualities.Unknown.value) "${quality}p" else "MP4"})",
+                        url = videoUrl,
+                        referer = finalUrl,
+                        quality = quality,
+                        isM3u8 = false
+                    )
+                    callback.invoke(link)
+                    return true
+                }
+            }
+        }
+        
+        // 4. Se for uma página do assistirseriesonline, procura por iframes/botões
+        if (finalUrl.contains("assistirseriesonline")) {
+            val doc = res.document
+            
+            // A. Procura iframe do player
+            val playerIframe = doc.selectFirst("iframe[src*='player'], iframe[src*='embed']")
+            if (playerIframe != null) {
+                val src = playerIframe.attr("src")
+                if (src.isNotBlank() && loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                    return true
+                }
+            }
+            
+            // B. Procura botão play
+            val playButton = doc.selectFirst("button[data-source], a[data-source]")
+            if (playButton != null) {
+                val source = playButton.attr("data-source")
+                if (source.isNotBlank() && loadExtractor(source, finalUrl, subtitleCallback, callback)) {
+                    return true
+                }
+            }
+        }
+        
+        // 5. ESTRATÉGIA PARA FILMES (mantém o que já funciona)
+        if (!finalUrl.contains("assistirseriesonline")) {
+            val doc = res.document
+            
+            // Tenta iframes (EmbedPlay)
+            doc.select("iframe[src]").forEach { iframe ->
+                val src = iframe.attr("src")
+                if (src.isNotBlank() && loadExtractor(src, finalUrl, subtitleCallback, callback)) {
+                    return true
+                }
+            }
+            
+            // Tenta botões com data-source
+            doc.select("button[data-source]").forEach { button ->
+                val source = button.attr("data-source")
+                if (source.isNotBlank() && loadExtractor(source, finalUrl, subtitleCallback, callback)) {
+                    return true
+                }
             }
         }
         
@@ -263,19 +323,31 @@ class UltraCine : MainAPI() {
     }
 }
 
-// Função auxiliar (já existe no seu código)
+// Função auxiliar para extrair qualidade
 private fun extractQualityFromUrl(url: String): Int {
+    // Extrai do padrão: .../chunk/1/544794072/2097152/360p/h264...
+    val qualityPattern = Regex("""/(\d+)p?/""")
+    val match = qualityPattern.find(url)
+    
+    if (match != null) {
+        val qualityNum = match.groupValues[1].toIntOrNull()
+        return when (qualityNum) {
+            360 -> Qualities.P360.value
+            480 -> Qualities.P480.value
+            720 -> Qualities.P720.value
+            1080 -> Qualities.P1080.value
+            2160 -> Qualities.P2160.value
+            else -> Qualities.Unknown.value
+        }
+    }
+    
+    // Fallback para busca textual
     return when {
-        url.contains("360p", ignoreCase = true) -> 360
-        url.contains("480p", ignoreCase = true) -> 480
-        url.contains("720p", ignoreCase = true) -> 720
-        url.contains("1080p", ignoreCase = true) -> 1080
-        url.contains("2160p", ignoreCase = true) -> 2160
-        url.contains("/360/") -> 360
-        url.contains("/480/") -> 480
-        url.contains("/720/") -> 720
-        url.contains("/1080/") -> 1080
+        url.contains("360p", ignoreCase = true) -> Qualities.P360.value
+        url.contains("480p", ignoreCase = true) -> Qualities.P480.value
+        url.contains("720p", ignoreCase = true) -> Qualities.P720.value
+        url.contains("1080p", ignoreCase = true) -> Qualities.P1080.value
+        url.contains("2160p", ignoreCase = true) -> Qualities.P2160.value
         else -> Qualities.Unknown.value
-     }
-   }
- }
+    }
+}
