@@ -7,8 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
-// AVISO: Certifique-se de que todos os extratores (EmbedPlayUpnsInk, PlayEmbedApiSite, etc.) 
-// estão criados e registrados em seu arquivo UltraCineProvider.kt!
+// AVISO: Certifique-se de que todos os extratores estão criados e registrados em UltraCineProvider.kt!
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -92,17 +91,24 @@ class UltraCine : MainAPI() {
 
         val trailer = doc.selectFirst("div.video iframe, iframe[src*=youtube]")?.attr("src")
 
-        // CORREÇÃO: Extração do link do player do atributo data-source do botão
+        // Extração do link do player do atributo data-source do botão
         val playerLinkFromButton = doc.selectFirst("div#players button[data-source]")
             ?.attr("data-source")?.takeIf { it.isNotBlank() }
 
+        // Detecção de séries: confiamos na URL e em um seletor de backup
         val isTvSeries = url.contains("/serie/") || doc.select("div.seasons").isNotEmpty()
 
-        return if (isTvSeries && playerLinkFromButton != null) {
+        // Usa 'return if' para retornar o tipo correto (Série ou Filme)
+        return if (isTvSeries) { 
             val episodes = mutableListOf<Episode>()
+            
+            // Tenta usar o playerLinkFromButton para carregar episódios se ele existir.
+            // Caso contrário, usa a URL da página da série para tentar extrair episódios.
+            val episodeLink = playerLinkFromButton ?: url 
+            
             try {
-                // Usa o link do botão para carregar a página do iframe de episódio
-                val iframeDoc = app.get(playerLinkFromButton).document 
+                // Usa o link para carregar a página que contém a lista de episódios.
+                val iframeDoc = app.get(episodeLink).document 
 
                 iframeDoc.select("li[data-episode-id]").forEach { ep ->
                     val epId = ep.attr("data-episode-id")
@@ -130,7 +136,7 @@ class UltraCine : MainAPI() {
                 trailer?.let { addTrailer(it) }
             }
         } else {
-            // Passa o link do botão (data-source) como o link de dados para loadLinks
+            // FLUXO DE FILMES (usa o link do botão ou a URL do filme se o link for null)
             newMovieLoadResponse(title, url, TvType.Movie, playerLinkFromButton ?: url) { 
                 this.posterUrl = poster
                 this.year = year
@@ -142,7 +148,7 @@ class UltraCine : MainAPI() {
                 trailer?.let { addTrailer(it) }
             }
         }
-    }
+    } // <--- FECHAMENTO CORRETO DE fun load
 
     override suspend fun loadLinks(
         data: String,
@@ -168,7 +174,7 @@ class UltraCine : MainAPI() {
             } catch (_: Exception) {
                 // Em caso de falha na extração de iframe, apenas ignora
             }
-            // GARANTE O RETORNO: Se entrou no IF, precisa retornar antes do fim do método.
+            // GARANTE O RETORNO: Se entrou no IF, retorna e sai daqui.
             return true 
         }
         
@@ -177,7 +183,7 @@ class UltraCine : MainAPI() {
              loadExtractor(link, data, subtitleCallback, callback)
         }
 
-        // 3. Retorno final obrigatório (para quando o primeiro IF não é ativado)
+        // 3. Retorno final obrigatório 
         return true
     }
 
