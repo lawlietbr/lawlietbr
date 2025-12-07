@@ -248,21 +248,24 @@ class UltraCine : MainAPI() {
             }
             if (success) return true
 
-            // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
-            // Aciona o WebViewResolver se o link 'apiblogger' for detectado ou se for uma página de episódio.
-            if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/")) {
-                // Usamos o nome do pacote completo para evitar conflito na declaração (Linha ~253)
-                val resolver = com.lagradost.cloudstream3.network.WebViewResolver(html) 
+             // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
+            // Eliminando a ambiguidade de tipo na condição IF.
+            // Linha 255 (aproximada no seu erro)
+            if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/", ignoreCase = true)) {
                 
+                // Usamos a versão simples aqui (assumindo que a importação está no topo)
+                val resolver = WebViewResolver(html) 
+                
+                // O bloco resolveUsingWebView é a única forma correta de usar esta função
                 resolver.resolveUsingWebView(finalUrl) { link ->
-                    // O bloco de filtro para m3u8/mp4 (Linhas ~256-258)
+                    // O link é a String real do vídeo. 
                     if (link.contains(".m3u8", ignoreCase = true) || link.contains(".mp4", ignoreCase = true)) {
+                        // Linha ~260 (Chamada estável de loadExtractor)
                         loadExtractor(link, finalUrl, subtitleCallback, callback) 
                     }
                 }
                 return true
             }
-
             return false
 
         } catch (e: Exception) {
