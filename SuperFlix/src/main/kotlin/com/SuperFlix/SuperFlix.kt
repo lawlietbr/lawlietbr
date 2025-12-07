@@ -66,20 +66,18 @@ class SuperFlix : MainAPI() {
             val title = element.attr("title")
             val url = fixUrl(element.attr("href"))
             
-            // CORREÇÃO POSTER: Busca por data-src ou src em qualquer <img>
-            val posterUrl = element.selectFirst("img")?.attr("data-src")
-                .takeIf { it?.isNotEmpty() == true } 
-                ?: element.selectFirst("img")?.attr("src")
-
             if (title.isNullOrEmpty() || url.isNullOrEmpty()) return@mapNotNull null
 
             val year = title.substringAfterLast("(").substringBeforeLast(")").toIntOrNull()
             val cleanTitle = title.substringBeforeLast("(").trim()
 
             val type = if (url.contains("/filme/")) TvType.Movie else TvType.TvSeries
-
-            newSearchResponse(cleanTitle, url, type) {
-                this.posterUrl = posterUrl?.let { fixUrl(it) } // Uso seguro
+            
+            // CORREÇÃO: Força o retorno do objeto para resolver o escopo
+            return@mapNotNull newSearchResponse(cleanTitle, url, type) {
+                this.posterUrl = element.selectFirst("img")?.attr("data-src")
+                    .takeIf { it?.isNotEmpty() == true } 
+                    ?: element.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
                 this.year = year
             }
         }
@@ -97,11 +95,6 @@ class SuperFlix : MainAPI() {
 
             val title = element.selectFirst(".card-title")?.text()?.trim() ?: return@mapNotNull null
             
-            // CORREÇÃO POSTER: Busca por data-src ou src em qualquer <img>
-            val posterUrl = element.selectFirst("img")?.attr("data-src")
-                .takeIf { it?.isNotEmpty() == true } 
-                ?: element.selectFirst("img")?.attr("src")
-
             val href = element.attr("href").ifEmpty { 
                 element.selectFirst("a")?.attr("href") 
             } ?: return@mapNotNull null
@@ -109,8 +102,11 @@ class SuperFlix : MainAPI() {
             val typeText = element.selectFirst(".card-meta")?.text()?.trim() ?: "Filme" 
             val type = if (typeText.contains("Série", ignoreCase = true)) TvType.TvSeries else TvType.Movie
 
-            newSearchResponse(title, fixUrl(href), type) {
-                this.posterUrl = posterUrl?.let { fixUrl(it) } // Uso seguro
+            // CORREÇÃO: Força o retorno do objeto para resolver o escopo
+            return@mapNotNull newSearchResponse(title, fixUrl(href), type) {
+                this.posterUrl = element.selectFirst("img")?.attr("data-src")
+                    .takeIf { it?.isNotEmpty() == true } 
+                    ?: element.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
             }
         }
 
