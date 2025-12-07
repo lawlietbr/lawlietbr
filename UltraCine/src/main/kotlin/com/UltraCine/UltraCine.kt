@@ -249,24 +249,32 @@ class UltraCine : MainAPI() {
             if (success) return true
 
              // Linha ~252:
-// ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
-// A linha crítica de comparação é a 256
-if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/", ignoreCase = true)) {
+// ========== 3. ESTRATÉGIA DE FALLBACK (// ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
+// Linha ~252: Condição corrigida com indexOf para evitar conflito String/Regex
+if (html.indexOf("apiblogger.click", ignoreCase = true) >= 0 || 
+    finalUrl.indexOf("episodio/", ignoreCase = true) >= 0) {
 
-    // Linha ~257: Onde o erro de tipo é reportado
-    val resolver = com.lagradost.cloudstream3.network.WebViewResolver(html) 
-    
-    // Linha ~259: Onde o erro de sobrecarga ocorre
-    // Usamos o resolvedor com a função lambda estável (que aceita String?)
-    resolver.resolveUsingWebView(finalUrl) { link: String? ->
-        
-        // Forçando o resolvedLink a ser não nulo e do tipo String (para evitar o erro no loadExtractor)
-        val resolvedLink = link ?: return@resolveUsingWebView
+    val resolver = WebViewResolver(html)  // Sem o 'com.lagradost...' full path – já importado
 
-        // Bloco de filtro para m3u8/mp4
-        if (resolvedLink.contains(".m3u8", ignoreCase = true) || resolvedLink.contains(".mp4", ignoreCase = true)) {
-            // Linha ~267: Chamada estável de loadExtractor
-            loadExtractor(resolvedLink, finalUrl, subtitleCallback, callback) 
+    launch {  // ← Resolve o erro de suspension (contexto coroutine)
+        val (mainRequest, subRequests) = resolver.resolveUsingWebView(finalUrl)
+
+        // Processa mainRequest primeiro
+        mainRequest?.url?.let { potentialLink ->
+            if (potentialLink.contains(".m3u8", ignoreCase = true) || 
+                potentialLink.contains(".mp4", ignoreCase = true)) {
+                loadExtractor(potentialLink, finalUrl, subtitleCallback, callback)
+            }
+        }
+
+        // Depois, processa sub-requests (comum para redirects/embeds)
+        subRequests.forEach { req ->
+            req.url?.let { potentialLink ->
+                if (potentialLink.contains(".m3u8", ignoreCase = true) || 
+                    potentialLink.contains(".mp4", ignoreCase = true)) {
+                    loadExtractor(potentialLink, finalUrl, subtitleCallback, callback)
+                }
+            }
         }
     }
     return true
