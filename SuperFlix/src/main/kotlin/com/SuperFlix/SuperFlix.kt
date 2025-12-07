@@ -27,18 +27,18 @@ class SuperFlix : MainAPI() {
         
         val home = mutableListOf<SearchResponse>()
         
-        // PRIMEIRA TENTATIVA: estrutura dos recomendados
+        // Estrutura dos recomendados
         document.select("div.recs-grid a.rec-card, .movie-card, article, .item").forEach { element ->
             element.toSearchResult()?.let { home.add(it) }
         }
         
-        // SEGUNDA TENTATIVA: todos os links de filmes/séries
+        // Fallback: todos os links
         if (home.isEmpty()) {
             document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { link ->
                 val href = link.attr("href")
                 if (href.isNotBlank() && !href.contains("#")) {
                     val title = link.selectFirst("img")?.attr("alt")
-                        ?: link.selectFirst(".rec-title, .title, h2, h3, .movie-title")?.text()
+                        ?: link.selectFirst(".rec-title, .title, h2, h3")?.text()
                         ?: href.substringAfterLast("/").replace("-", " ").replace(Regex("\\d{4}$"), "").trim()
                     
                     if (title.isNotBlank()) {
@@ -65,9 +65,7 @@ class SuperFlix : MainAPI() {
             }
         }
         
-        // Remover duplicados
-        val uniqueHome = home.distinctBy { it.url }
-        return newHomePageResponse(request.name, uniqueHome)
+        return newHomePageResponse(request.name, home.distinctBy { it.url })
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -109,40 +107,8 @@ class SuperFlix : MainAPI() {
         
         val results = mutableListOf<SearchResponse>()
         
-        // Primeiro: estrutura dos recomendados
-        document.select("div.recs-grid a.rec-card").forEach { element ->
+        document.select("div.recs-grid a.rec-card, a[href*='/filme/'], a[href*='/serie/']").forEach { element ->
             element.toSearchResult()?.let { results.add(it) }
-        }
-        
-        // Segundo: qualquer link de filme/série
-        if (results.isEmpty()) {
-            document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { link ->
-                val href = link.attr("href")
-                val title = link.selectFirst("img")?.attr("alt") 
-                    ?: link.selectFirst("h2, h3, .title")?.text()
-                    ?: href.substringAfterLast("/").replace("-", " ").replace(Regex("\\d{4}$"), "").trim()
-                
-                if (title.isNotBlank() && href.isNotBlank()) {
-                    val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
-                    val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
-                    val poster = link.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
-                    val isSerie = href.contains("/serie/")
-                    
-                    val searchResponse = if (isSerie) {
-                        newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
-                            this.posterUrl = poster
-                            this.year = year
-                        }
-                    } else {
-                        newMovieSearchResponse(cleanTitle, fixUrl(href), TvType.Movie) {
-                            this.posterUrl = poster
-                            this.year = year
-                        }
-                    }
-                    
-                    results.add(searchResponse)
-                }
-            }
         }
         
         return results.distinctBy { it.url }
@@ -158,7 +124,7 @@ class SuperFlix : MainAPI() {
         val title = jsonLd.title ?: document.selectFirst("h1, .title")?.text() ?: return null
         val year = jsonLd.year ?: Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
         
-        // Poster em qualidade original
+        // Poster
         val poster = jsonLd.posterUrl?.replace("/w500/", "/original/")
             ?: document.selectFirst("meta[property='og:image']")?.attr("content")?.let { fixUrl(it) }
             ?.replace("/w500/", "/original/")
@@ -176,25 +142,12 @@ class SuperFlix : MainAPI() {
         // Diretor
         val director = jsonLd.director?.firstOrNull()
         
-        // Encontrar iframe do Fembed
-        val iframe = document.selectFirst("iframe[src*='fembed']")
-        val fembedUrl = iframe?.attr("src")
-        
-        // Se não tiver iframe, tentar extrair do JSON-LD (TMDB ID)
-        val finalFembedUrl = fembedUrl ?: jsonLd.tmdbId?.let { "https://fembed.sx/e/$it" }
-        
         // Verificar se é série
         val isSerie = url.contains("/serie/") || jsonLd.type == "TVSeries"
         
         return if (isSerie) {
-            // Para séries, criar um episódio com o próprio link
-            val episodes = listOf(
-                newEpisode(url) {
-                    this.name = title
-                    this.season = 1
-                    this.episode = 1
-                }
-            )
+            // 🔥 NOVO: EXTRAIR EPISÓDIOS DOS BOTÕES PLAY
+            val episodes = extractEpisodesFromButtons(document, url)
             
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
@@ -205,7 +158,10 @@ class SuperFlix : MainAPI() {
                 addActors(actors)
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, finalFembedUrl ?: "") {
+            // Para filmes, buscar iframe ou botão play
+            val fembedUrl = findFembedUrl(document)
+            
+            newMovieLoadResponse(title, url, TvType.Movie, fembedUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -216,7 +172,101 @@ class SuperFlix : MainAPI() {
         }
     }
 
-    // Função para extrair JSON-LD
+    // 🔥 NOVA FUNÇÃO: EXTRAIR EPISÓDIOS DOS BOTÕES PLAY
+    private fun extractEpisodesFromButtons(document: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
+        val episodes = mutableListOf<Episode>()
+        
+        // Procurar por botões PLAY com data-url
+        document.select("button.bd-play[data-url]").forEach { button ->
+            val fembedUrl = button.attr("data-url")
+            val season = button.attr("data-season").toIntOrNull() ?: 1
+            val episodeNum = button.attr("data-ep").toIntOrNull() ?: 1
+            
+            // Tentar encontrar o título do episódio
+            var episodeTitle = "Episódio $episodeNum"
+            
+            // Procurar elemento pai que possa conter o título
+            val parent = button.parents().find { it.hasClass("episode-item") || it.hasClass("episode") }
+            parent?.let {
+                val titleElement = it.selectFirst(".ep-title, .title, .name, h3, h4")
+                if (titleElement != null) {
+                    episodeTitle = titleElement.text().trim()
+                }
+            }
+            
+            episodes.add(
+                newEpisode(fembedUrl) {
+                    this.name = episodeTitle
+                    this.season = season
+                    this.episode = episodeNum
+                }
+            )
+        }
+        
+        // Se não encontrou botões, tentar outra estrutura
+        if (episodes.isEmpty()) {
+            document.select(".episode-item, .episode, .episodio").forEachIndexed { index, episodeElement ->
+                val episodeNum = index + 1
+                val button = episodeElement.selectFirst("button.bd-play[data-url]")
+                val fembedUrl = button?.attr("data-url")
+                
+                if (fembedUrl != null) {
+                    val title = episodeElement.selectFirst(".ep-title, .title, .name")?.text() 
+                        ?: "Episódio $episodeNum"
+                    val season = button.attr("data-season").toIntOrNull() ?: 1
+                    
+                    episodes.add(
+                        newEpisode(fembedUrl) {
+                            this.name = title
+                            this.season = season
+                            this.episode = episodeNum
+                        }
+                    )
+                }
+            }
+        }
+        
+        return episodes
+    }
+
+    // 🔥 NOVA FUNÇÃO: ENCONTRAR URL DO FEMBED
+    private fun findFembedUrl(document: org.jsoup.nodes.Document): String? {
+        // 1. Primeiro: iframe direto
+        val iframe = document.selectFirst("iframe[src*='fembed']")
+        if (iframe != null) {
+            return iframe.attr("src")
+        }
+        
+        // 2. Segundo: botão PLAY com data-url
+        val playButton = document.selectFirst("button.bd-play[data-url]")
+        if (playButton != null) {
+            return playButton.attr("data-url")
+        }
+        
+        // 3. Terceiro: qualquer botão com data-url contendo fembed
+        val anyButton = document.selectFirst("button[data-url*='fembed']")
+        if (anyButton != null) {
+            return anyButton.attr("data-url")
+        }
+        
+        // 4. Quarto: procurar em scripts
+        val html = document.html()
+        val patterns = listOf(
+            Regex("""https?://fembed\.sx/e/\d+"""),
+            Regex("""data-url=["'](https?://[^"']+fembed[^"']+)["']"""),
+            Regex("""src\s*[:=]\s*["'](https?://[^"']+fembed[^"']+)["']""")
+        )
+        
+        patterns.forEach { pattern ->
+            pattern.find(html)?.let { match ->
+                val url = if (match.groupValues.size > 1) match.groupValues[1] else match.value
+                if (url.isNotBlank()) return url
+            }
+        }
+        
+        return null
+    }
+
     private data class JsonLdInfo(
         val title: String? = null,
         val year: Int? = null,
@@ -238,23 +288,16 @@ class SuperFlix : MainAPI() {
                 val json = match.groupValues[1].trim()
                 if (json.contains("\"@type\":\"Movie\"") || json.contains("\"@type\":\"TVSeries\"")) {
                     
-                    // Extrair título
                     val title = Regex("\"name\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
-                    
-                    // Extrair poster
                     val image = Regex("\"image\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
-                    
-                    // Extrair descrição
                     val description = Regex("\"description\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
                     
-                    // Extrair gêneros
                     val genresMatch = Regex("\"genre\":\\s*\\[([^\\]]+)\\]").find(json)
                     val genres = genresMatch?.groupValues?.get(1)
                         ?.split(",")
                         ?.map { it.trim().trim('"', '\'') }
                         ?.filter { it.isNotBlank() }
                     
-                    // Extrair atores
                     val actorsMatch = Regex("\"actor\":\\s*\\[([^\\]]+)\\]").find(json)
                     val actors = actorsMatch?.groupValues?.get(1)
                         ?.split("},")
@@ -262,7 +305,6 @@ class SuperFlix : MainAPI() {
                             Regex("\"name\":\"([^\"]+)\"").find(actor)?.groupValues?.get(1)
                         }
                     
-                    // Extrair diretor
                     val directorMatch = Regex("\"director\":\\s*\\[([^\\]]+)\\]").find(json)
                     val director = directorMatch?.groupValues?.get(1)
                         ?.split("},")
@@ -270,7 +312,6 @@ class SuperFlix : MainAPI() {
                             Regex("\"name\":\"([^\"]+)\"").find(dir)?.groupValues?.get(1)
                         }
                     
-                    // Extrair TMDB ID
                     val sameAsMatch = Regex("\"sameAs\":\\s*\\[([^\\]]+)\\]").find(json)
                     val tmdbId = sameAsMatch?.groupValues?.get(1)
                         ?.split(",")
@@ -278,7 +319,6 @@ class SuperFlix : MainAPI() {
                         ?.substringAfterLast("/")
                         ?.trim(' ', '"', '\'')
                     
-                    // Determinar tipo
                     val type = if (json.contains("\"@type\":\"Movie\"")) "Movie" else "TVSeries"
                     
                     return JsonLdInfo(
@@ -315,17 +355,24 @@ class SuperFlix : MainAPI() {
                 return loadExtractor(data, mainUrl, subtitleCallback, callback)
             }
             
-            // Se for URL do SuperFlix, procurar iframe
+            // Se for URL do SuperFlix
             val finalUrl = if (data.startsWith("http")) data else fixUrl(data)
             val res = app.get(finalUrl, referer = mainUrl)
             val doc = res.document
             
-            // Procurar iframe do Fembed
-            val iframe = doc.selectFirst("iframe[src*='fembed']")
-            val fembedUrl = iframe?.attr("src")
+            // 🔥 PROCURAR BOTÃO PLAY COM DATA-URL
+            val playButton = doc.selectFirst("button.bd-play[data-url], button[data-url*='fembed']")
+            if (playButton != null) {
+                val fembedUrl = playButton.attr("data-url")
+                if (fembedUrl.isNotBlank()) {
+                    return loadExtractor(fembedUrl, finalUrl, subtitleCallback, callback)
+                }
+            }
             
-            if (fembedUrl != null) {
-                return loadExtractor(fembedUrl, finalUrl, subtitleCallback, callback)
+            // Fallback: iframe
+            val iframe = doc.selectFirst("iframe[src*='fembed']")
+            if (iframe != null) {
+                return loadExtractor(iframe.attr("src"), finalUrl, subtitleCallback, callback)
             }
             
             false
