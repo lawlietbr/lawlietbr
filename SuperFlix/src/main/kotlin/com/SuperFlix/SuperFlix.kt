@@ -98,58 +98,51 @@ class SuperFlix : MainAPI() {
 
     // DENTRO DA FUNÇÃO load(url: String)
 
-override suspend fun load(url: String): LoadResponse {
-    // Usamos headers completos, pois isBrowser=true não funciona na sua API
-    val response = app.get(url, headers = defaultHeaders) 
-    val document = response.document
+    override suspend fun load(url: String): LoadResponse {
+        val response = app.get(url, headers = defaultHeaders) 
+        val document = response.document
 
-    val isMovie = url.contains("/filme/")
+        val isMovie = url.contains("/filme/")
 
-    // >>>>> INÍCIO DO CÓDIGO DE DIAGNÓSTICO <<<<<
-    val title = document.selectFirst("h1.text-3xl")?.text()?.trim()
-        ?: document.selectFirst("h1")?.text()?.trim() 
+        // CORREÇÃO: Usando seletor simples <h1>.
+        val title = document.selectFirst("h1")?.text()?.trim()
+            ?: document.selectFirst("div.entry-content h1")?.text()?.trim() 
+            ?: throw ErrorLoadingException("Seletor de título incorreto. Favor inspecionar o elemento do título.")
+            
+        val posterUrl = document.selectFirst("div.poster img")?.attr("src")?.let { fixUrl(it) }
+        val plot = document.selectFirst("p.text-gray-400")?.text()?.trim()
+        val tags = document.select("a[href*=/genero/]").map { it.text().trim() }
+        val year = title.substringAfterLast("(").substringBeforeLast(")").toIntOrNull()
 
-    if (title.isNullOrEmpty()) {
-        // Pega as primeiras 150 caracteres do HTML recebido
-        val errorHtml = document.html().take(150)
-        // Lança um erro que você verá no log do Cloudstream
-        throw ErrorLoadingException("ERRO: Título não encontrado! HTML Recebido (150 chars): $errorHtml")
-    }
-    // >>>>> FIM DO CÓDIGO DE DIAGNÓSTICO <<<<<
-        
-    val posterUrl = document.selectFirst("div.poster img")?.attr("src")?.let { fixUrl(it) }
-    val plot = document.selectFirst("p.text-gray-400")?.text()?.trim()
-    val tags = document.select("a[href*=/genero/]").map { it.text().trim() }
-    val year = title.substringAfterLast("(").substringBeforeLast(")").toIntOrNull()
+        val type = if (isMovie) TvType.Movie else TvType.TvSeries
 
-    val type = if (isMovie) TvType.Movie else TvType.TvSeries
-
-    return if (isMovie) {
-        val embedUrl = getFembedUrl(document)
-        newMovieLoadResponse(title, url, type, embedUrl) {
-            this.posterUrl = posterUrl
-            this.plot = plot
-            this.tags = tags
-            this.year = year
-        }
-    } else {
-        val seasons = document.select("div#season-tabs button").mapIndexed { index, element ->
-            val seasonName = element.text().trim()
-            newEpisode(url) {
-                name = seasonName
-                season = index + 1
-                episode = 1 
-                data = url 
+        return if (isMovie) {
+            val embedUrl = getFembedUrl(document)
+            newMovieLoadResponse(title, url, type, embedUrl) {
+                this.posterUrl = posterUrl
+                this.plot = plot
+                this.tags = tags
+                this.year = year
+            }
+        } else {
+            val seasons = document.select("div#season-tabs button").mapIndexed { index, element ->
+                val seasonName = element.text().trim()
+                newEpisode(url) {
+                    name = seasonName
+                    season = index + 1
+                    episode = 1 
+                    data = url 
+                }
+            }
+            newTvSeriesLoadResponse(title, url, type, seasons) { 
+                this.posterUrl = posterUrl
+                this.plot = plot
+                this.tags = tags
+                this.year = year
             }
         }
-        newTvSeriesLoadResponse(title, url, type, seasons) { 
-            this.posterUrl = posterUrl
-            this.plot = plot
-            this.tags = tags
-            this.year = year
-        }
     }
-}
+
     override suspend fun loadLinks(
         data: String,
         isMovie: Boolean,
