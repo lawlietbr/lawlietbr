@@ -19,7 +19,7 @@ class SuperFlix : MainAPI() {
         TvType.TvSeries
     )
 
-    // Headers completos para simular o navegador e evitar bloqueios de servidor (Cloudflare/Anti-Scraping)
+    // Headers completos para simular o navegador
     private val defaultHeaders = mapOf(
         "Referer" to mainUrl,
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -57,14 +57,14 @@ class SuperFlix : MainAPI() {
             } else {
                 "$mainUrl/$type/page/$page"
             }
-        } // Fim do bloco de definição da 'url'
+        }
         
-        val response = app.get(url, headers = defaultHeaders) // A variável 'url' está agora no escopo correto
+        val response = app.get(url, headers = defaultHeaders)
         val document = response.document
 
         val list = document.select("a.card").mapNotNull { element -> 
             val title = element.attr("title")
-            val url = fixUrl(element.attr("href")) // Corrigida a referência à URL local
+            val url = fixUrl(element.attr("href"))
             val posterUrl = element.selectFirst("img.card-img")?.attr("src")?.let { fixUrl(it) }
 
             if (title.isNullOrEmpty() || url.isNullOrEmpty()) return@mapNotNull null
@@ -74,10 +74,10 @@ class SuperFlix : MainAPI() {
 
             val type = if (url.contains("/filme/")) TvType.Movie else TvType.TvSeries
 
-            // CORREÇÃO: Usando newSearchResponse
-            return@mapNotNull newSearchResponse(cleanTitle, url, type) {
-                this.posterUrl = posterUrl // CORREÇÃO: Usando 'this.' e variável local 'posterUrl'
-                this.year = year // CORREÇÃO: Usando 'this.' e variável local 'year'
+            // CORRIGIDO: Escopo e newSearchResponse
+            newSearchResponse(cleanTitle, url, type) {
+                this.posterUrl = posterUrl
+                this.year = year
             }
         }
 
@@ -85,16 +85,14 @@ class SuperFlix : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        // 1. Constrói a URL de busca
         val url = "$mainUrl/?s=$query"
 
-        // 2. Faz a requisição HTTP (mantendo os headers completos)
         val response = app.get(url, headers = defaultHeaders)
         val document = response.document 
 
-        // 3. Seleciona e mapeia os resultados
         val results = document.select("a.card, div.card").mapNotNull { element ->
 
+            // Extração de Dados
             val title = element.selectFirst(".card-title")?.text()?.trim() ?: return@mapNotNull null
             val posterUrl = element.selectFirst(".card-img")?.attr("src")?.let { fixUrl(it) } ?: return@mapNotNull null
             
@@ -105,9 +103,8 @@ class SuperFlix : MainAPI() {
             val typeText = element.selectFirst(".card-meta")?.text()?.trim() ?: "Filme" 
             val type = if (typeText.contains("Série", ignoreCase = true)) TvType.TvSeries else TvType.Movie
 
-            // CORREÇÃO: Usando newSearchResponse
-            return@mapNotNull newSearchResponse(title, fixUrl(href), type) {
-                // CORREÇÃO: Usando 'this.' e variável local 'posterUrl'
+            // CORRIGIDO: Escopo e newSearchResponse
+            newSearchResponse(title, fixUrl(href), type) {
                 this.posterUrl = posterUrl
             }
         }
@@ -145,7 +142,7 @@ class SuperFlix : MainAPI() {
         // 3. TAGS/GÊNEROS
         val tags = document.select("a.chip").map { it.text().trim() }.filter { it.isNotEmpty() }
 
-        // 4. ELENCO (ATORES): Lógica final de isolamento
+        // 4. ELENCO (ATORES): Lógica final de isolamento por texto
         val actorLinks = document.select("p, div").filter {
             it.text().contains("Elenco", ignoreCase = true) 
         }.flatMap { 
