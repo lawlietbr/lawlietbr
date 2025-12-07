@@ -194,7 +194,8 @@ class UltraCine : MainAPI() {
                     "https://assistirseriesonline.icu/episodio/$data"
                 }
                 // URL do ultracine com ID (EPISÓDIO DE SÉRIE)
-                data.contains("ultracine.org/") && data.matches(Regex(".*/\\d+$")) -> {
+                // CORRIGIDO: Usando 'ignoreCase = true' para forçar a comparação de String e evitar conflito de Regex.
+                data.contains("ultracine.org/", ignoreCase = true) && data.matches(Regex(".*/\\d+$")) -> { 
                     val id = data.substringAfterLast("/")
                     "https://assistirseriesonline.icu/episodio/$id"
                 }
@@ -207,9 +208,9 @@ class UltraCine : MainAPI() {
             val html = res.text
             
             var success = false
-            
+
             // ========== 2. DETECÇÃO DE IFRAMES/BOTÕES (Players conhecidos) ==========
-            
+
             // A. Tenta botões com data-source (EmbedPlay, Upns, etc.)
             doc.select("button[data-source]").forEach { button ->
                 val source = button.attr("data-source")
@@ -235,7 +236,7 @@ class UltraCine : MainAPI() {
                 }
             }
             if (success) return true
-            
+
             // C. Tenta qualquer iframe que pareça ser um player de vídeo
             doc.select("iframe[src]").forEach { iframe ->
                 val src = iframe.attr("src")
@@ -248,20 +249,21 @@ class UltraCine : MainAPI() {
             if (success) return true
 
             // ========== 3. ESTRATÉGIA DE FALLBACK (WebViewResolver) ==========
-            // Este bloco agora está sintaticamente correto
+            // Aciona o WebViewResolver se o link 'apiblogger' for detectado ou se for uma página de episódio.
             if (html.contains("apiblogger.click", ignoreCase = true) || finalUrl.contains("episodio/")) {
-                val resolver = com.lagradost.cloudstream3.network.WebViewResolver(html) // Usa a referência completa se a importação falhar
+                // Usamos o nome do pacote completo para evitar conflito na declaração (Linha ~253)
+                val resolver = com.lagradost.cloudstream3.network.WebViewResolver(html) 
+                
                 resolver.resolveUsingWebView(finalUrl) { link ->
-                    // Este bloco é o CORPO da função lambda (callback)
+                    // O bloco de filtro para m3u8/mp4 (Linhas ~256-258)
                     if (link.contains(".m3u8", ignoreCase = true) || link.contains(".mp4", ignoreCase = true)) {
-                        // Linha 253 (aproximadamente): Chamada do suspension function
-                        loadExtractor(link, finalUrl, subtitleCallback, callback)
+                        loadExtractor(link, finalUrl, subtitleCallback, callback) 
                     }
                 }
-                return true // Retorna true porque o processo de resolução foi iniciado
+                return true
             }
-            
-            return false // Falha se nada foi encontrado
+
+            return false
 
         } catch (e: Exception) {
             e.printStackTrace()
