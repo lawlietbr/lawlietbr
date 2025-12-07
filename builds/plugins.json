@@ -198,10 +198,10 @@
     },
     {
         "iconUrl": "https://ultracine.org/wp-content/uploads/2024/07/cropped-favicon-300x300.png",
-        "jarFileSize": 56139,
+        "jarFileSize": 75300,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
-        "fileSize": 17010,
+        "fileSize": 23109,
         "status": 1,
         "language": "pt-br",
         "authors": [
@@ -220,10 +220,10 @@
     },
     {
         "iconUrl": "https://novizer.com/img/android-chrome-192x192.png",
-        "jarFileSize": 35896,
+        "jarFileSize": 35900,
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/euluan1912/cloudstream-brazil-providers",
-        "fileSize": 10141,
+        "fileSize": 10140,
         "status": 1,
         "language": "pt-br",
         "authors": [
