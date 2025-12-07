@@ -101,7 +101,7 @@ class SuperFlix : MainAPI() {
 
     // CORREÇÃO: load também usa headers para evitar o bloqueio e "Título não encontrado"
     override suspend fun load(url: String): LoadResponse {
-        val response = app.get(url, headers = defaultHeaders) 
+        val response = app.get(url, isBrowser = true) 
         val document = response.document
 
         val isMovie = url.contains("/filme/")
