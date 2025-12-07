@@ -4,9 +4,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.network.WebViewResolver
-import org.jsoup.nodes.Element
 import kotlinx.coroutines.delay
+import org.jsoup.nodes.Element
 
 class UltraCine : MainAPI() {
     override var mainUrl = "https://ultracine.org"
@@ -15,6 +14,8 @@ class UltraCine : MainAPI() {
     override var lang = "pt-br"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val hasQuickSearch = true
+    override val vpnStatus = VPNStatus.MightBeNeeded
 
     override val mainPage = mainPageOf(
         "$mainUrl/category/lancamentos/" to "Lançamentos",
@@ -35,21 +36,28 @@ class UltraCine : MainAPI() {
         "$mainUrl/category/thriller/" to "Thriller"
     )
 
+    private fun getUserAgent(): String = 
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = request.data + if (page > 1) "page/$page/" else ""
         val document = app.get(url).document
-        val home = document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull { it.toSearchResult() }
+        val home = document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
+            it.toSearchResult()
+        }
         return newHomePageResponse(request.name, home)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("header.entry-header h2.entry-title")?.text() ?: return null
         val href = selectFirst("a.lnk-blk")?.attr("href") ?: return null
-        val posterUrl = selectFirst("div.post-thumbnail figure img")?.attr("src")?.let { src ->
-            if (src.length > 0) fixUrl(src).replace("/w500/", "/original/") else null
-        } ?: selectFirst("div.post-thumbnail figure img")?.attr("data-src")?.let { dataSrc ->
-            if (dataSrc.length > 0) fixUrl(dataSrc).replace("/w500/", "/original/") else null
-        }
+
+        val posterUrl = selectFirst("div.post-thumbnail figure img")?.attr("src")
+            ?.takeIf { it.isNotBlank() } 
+            ?.let { fixUrl(it).replace("/w500/", "/original/") }
+            ?: selectFirst("div.post-thumbnail figure img")?.attr("data-src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it).replace("/w500/", "/original/") }
 
         val year = selectFirst("span.year")?.text()?.toIntOrNull()
 
@@ -62,45 +70,54 @@ class UltraCine : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/?s=$query").document
-        return document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull { it.toSearchResult() }
+        return document.select("div.aa-cn div#movies-a ul.post-lst li").mapNotNull {
+            it.toSearchResult()
+        }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
-        val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
-        val poster = document.selectFirst("div.bghd img.TPostBg")?.attr("src")?.let { src ->
-            if (src.length > 0) fixUrl(src).replace("/w1280/", "/original/") else null
-        } ?: document.selectFirst("div.bghd img.TPostBg")?.attr("data-src")?.let { dataSrc ->
-            if (dataSrc.length > 0) fixUrl(dataSrc).replace("/w1280/", "/original/") else null
-        }
 
-        val year = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.ownText()?.toIntOrNull()
+        val title = document.selectFirst("aside.fg1 header.entry-header h1.entry-title")?.text() ?: return null
+
+        val poster = document.selectFirst("div.bghd img.TPostBg")?.attr("src")
+            ?.takeIf { it.isNotBlank() } 
+            ?.let { fixUrl(it).replace("/w1280/", "/original/") }
+            ?: document.selectFirst("div.bghd img.TPostBg")?.attr("data-src")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { fixUrl(it).replace("/w1280/", "/original/") }
+
+        val yearText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.year")?.ownText()
+        val year = yearText?.toIntOrNull()
         val durationText = document.selectFirst("aside.fg1 header.entry-header div.entry-meta span.duration")?.ownText()
         val plot = document.selectFirst("aside.fg1 div.description p")?.text()
         val tags = document.select("aside.fg1 header.entry-header div.entry-meta span.genres a").map { it.text() }
-        val actors = document.select("aside.fg1 ul.cast-lst p a").map { Actor(it.text(), it.attr("href")) }
-        val trailer = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")?.takeIf { it.length > 0 }
-            ?: document.selectFirst("div.mdl-cn div.video iframe")?.attr("data-src")
-
-        val iframeUrl = document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("src")?.takeIf { it.length > 0 }
-            ?: document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("data-src")
+        val actors = document.select("aside.fg1 ul.cast-lst p a").map {
+            Actor(it.text(), it.attr("href"))
+        }
+        val trailer = document.selectFirst("div.mdl-cn div.video iframe")?.attr("src")
+            ?.takeIf { it.isNotBlank() } ?: document.selectFirst("div.mdl-cn div.video iframe")?.attr("data-src")
 
         val isSerie = url.contains("/serie/")
 
         return if (isSerie) {
-            val episodes = if (iframeUrl != null) {
-                try { app.get(iframeUrl).document.let { parseSeriesEpisodes(it) } } catch (e: Exception) { emptyList() }
-            } else emptyList()
-
+            // Extrair informações específicas para séries
+            val episodes = parseSeriesEpisodes(document)
+            
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
+                this.recommendations = null
                 addActors(actors)
                 addTrailer(trailer)
             }
         } else {
+            // Filmes - buscar iframe do player
+            val iframeUrl = document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("src")
+                ?.takeIf { it.isNotBlank() } ?: document.selectFirst("iframe[src*='assistirseriesonline']")?.attr("data-src")
+
             newMovieLoadResponse(title, url, TvType.Movie, iframeUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
@@ -115,22 +132,120 @@ class UltraCine : MainAPI() {
 
     private fun parseSeriesEpisodes(doc: org.jsoup.nodes.Document): List<Episode> {
         val episodes = mutableListOf<Episode>()
-        doc.select("header.header ul.header-navigation li").forEach { seasonEl ->
-            val seasonNum = seasonEl.attr("data-season-number").toIntOrNull() ?: return@forEach
-            val seasonId = seasonEl.attr("data-season-id")
-            doc.select("li[data-season-id='$seasonId']").mapNotNull { epEl ->
-                val epId = epEl.attr("data-episode-id")
-                if (epId.isBlank()) return@mapNotNull null
-                val title = epEl.selectFirst("a")?.text() ?: "Episódio"
-                val epNum = title.substringBefore(" - ").toIntOrNull() ?: 1
-                newEpisode(epId) {
-                    this.name = title.substringAfter(" - ").takeIf { it.isNotEmpty() } ?: title
-                    this.season = seasonNum
-                    this.episode = epNum
-                }
-            }.also { episodes.addAll(it) }
+        
+        println("=== ANALISANDO EPISÓDIOS DA SÉRIE ===")
+        
+        // ESTRATÉGIA 1: Procurar elementos com data-episode-id
+        doc.select("[data-episode-id]").forEach { element ->
+            val episodeId = element.attr("data-episode-id")
+            val title = element.selectFirst("span.episode-title")?.text() 
+                ?: element.text().trim()
+            
+            if (episodeId.isNotBlank() && title.isNotBlank()) {
+                println("🎬 Encontrado (data-episode-id): $title -> ID: $episodeId")
+                
+                val (season, episode) = extractSeasonEpisode(title)
+                
+                episodes.add(
+                    newEpisode(episodeId) {
+                        this.name = title
+                        this.season = season
+                        this.episode = episode
+                    }
+                )
+            }
         }
-        return episodes
+        
+        // ESTRATÉGIA 2: Procurar em divs de episódios
+        doc.select("div.episode-item, li.episode-item").forEach { item ->
+            val onclick = item.attr("onclick")
+            val dataId = item.attr("data-id")
+            val title = item.selectFirst(".episode-title, .title")?.text() 
+                ?: item.text().trim()
+            
+            val episodeId = when {
+                dataId.isNotBlank() -> dataId
+                onclick.contains("loadEpisode") -> {
+                    val match = Regex("""loadEpisode\s*\(\s*['"]?(\d+)['"]?\s*\)""").find(onclick)
+                    match?.groupValues?.get(1)
+                }
+                onclick.contains("playEpisode") -> {
+                    val match = Regex("""playEpisode\s*\(\s*['"]?(\d+)['"]?\s*\)""").find(onclick)
+                    match?.groupValues?.get(1)
+                }
+                else -> null
+            }
+            
+            if (episodeId != null && title.isNotBlank()) {
+                println("🎬 Encontrado (onclick): $title -> ID: $episodeId")
+                
+                val (season, episode) = extractSeasonEpisode(title)
+                
+                episodes.add(
+                    newEpisode(episodeId) {
+                        this.name = title
+                        this.season = season
+                        this.episode = episode
+                    }
+                )
+            }
+        }
+        
+        // ESTRATÉGIA 3: Procurar por links de episódios
+        doc.select("a[href*='/episodio/']").forEach { link ->
+            val href = link.attr("href")
+            val title = link.text().trim()
+            
+            if (title.isNotBlank() && href.isNotBlank()) {
+                // Extrair ID do episódio da URL
+                val episodeId = Regex("""/episodio/(\d+)/?""").find(href)?.groupValues?.get(1)
+                    ?: Regex("""e=(\d+)""").find(href)?.groupValues?.get(1)
+                
+                if (episodeId != null) {
+                    println("🎬 Encontrado (link): $title -> ID: $episodeId")
+                    
+                    val (season, episode) = extractSeasonEpisode(title)
+                    
+                    episodes.add(
+                        newEpisode(episodeId) {
+                            this.name = title
+                            this.season = season
+                            this.episode = episode
+                        }
+                    )
+                }
+            }
+        }
+        
+        println("\n✅ Total de episódios encontrados: ${episodes.size}")
+        return episodes.distinctBy { it.episode }
+    }
+
+    private fun extractSeasonEpisode(text: String): Pair<Int, Int> {
+        var season = 1
+        var episode = 1
+        
+        // Tentar padrões como "T1 E1", "S01E01", "1x01", etc.
+        val patterns = listOf(
+            Regex("""T(\d+)\s*E(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""S(\d+)\s*E(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""(\d+)x(\d+)"""),
+            Regex("""Episódio\s*(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""E(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""(\d+)\s*-\s*(\d+)""")
+        )
+        
+        for (pattern in patterns) {
+            val match = pattern.find(text)
+            if (match != null) {
+                season = match.groupValues.getOrNull(1)?.toIntOrNull() ?: 1
+                episode = match.groupValues.getOrNull(2)?.toIntOrNull() ?: 
+                         match.groupValues.getOrNull(1)?.toIntOrNull() ?: 1
+                break
+            }
+        }
+        
+        return Pair(season, episode)
     }
 
     private fun parseDuration(duration: String?): Int? {
@@ -147,75 +262,216 @@ class UltraCine : MainAPI() {
     }
 
     override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
-    if (data.isBlank()) return false
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        println("🎬 ULTRA CINE loadLinks CHAMADO!")
+        println("📦 Data recebido: $data")
+        
+        if (data.isBlank()) return false
 
-    val isEpisode = data.matches(Regex("^\\d+$")) || data.contains("assistirseriesonline.icu")
-
-    val url = if (data.matches(Regex("^\\d+$"))) {
-        "https://assistirseriesonline.icu/episodio/$data"
-    } else {
-        data
+        return try {
+            // PARA SÉRIES: data contém o ID do episódio
+            if (data.matches(Regex("\\d+"))) {
+                return loadEpisodeLinks(data, subtitleCallback, callback)
+            }
+            
+            // PARA FILMES: data contém URL do iframe
+            return loadMovieLinks(data, subtitleCallback, callback)
+            
+        } catch (e: Exception) {
+            println("💥 ERRO em loadLinks: ${e.message}")
+            e.printStackTrace()
+            false
+        }
     }
 
-    return try {
-        val headers = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-        val res = app.get(url, referer = mainUrl, headers = headers)
-        val html = res.text
-
-        if (isEpisode) {
-            delay(5000) // 5s pra JS inicial carregar o src no JW Player
-        }
-
-        // Regex pro JW Player (da tua screenshot: <video class="jw-video jw-reset" src="https://storage.googleapis.com/...")
-        val jwPattern = Regex("""<video[^>]*jw-video[^>]*src=["']([^"']+\.mp4[^"']*)["']""", RegexOption.IGNORE_CASE)
-        jwPattern.find(html)?.groupValues?.get(1)?.let { videoUrl ->
-            if (videoUrl.contains("storage.googleapis.com") && !videoUrl.contains("banner") && !videoUrl.contains("ads")) {
-                val quality = when {
-                    videoUrl.contains("360p") -> 360
-                    videoUrl.contains("480p") -> 480
-                    videoUrl.contains("720p") -> 720
-                    videoUrl.contains("1080p") -> 1080
-                    else -> Qualities.Unknown.value
+    private suspend fun loadMovieLinks(
+        iframeUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        println("🎬 Carregando links de FILME...")
+        println("🔗 Iframe URL: $iframeUrl")
+        
+        val headers = mapOf(
+            "User-Agent" to getUserAgent(),
+            "Referer" to mainUrl,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language" to "pt-BR,pt;q=0.9,en;q=0.8"
+        )
+        
+        return try {
+            // PRIMEIRO: Tentar acessar o iframe
+            val doc = app.get(fixUrl(iframeUrl), headers = headers, timeout = 30).document
+            
+            // ESTRATÉGIA 1: Procurar scripts com player config
+            val scripts = doc.select("script:not([src])")
+            for (script in scripts) {
+                val scriptText = script.html()
+                
+                // Procurar por iframes dentro de scripts
+                val iframePattern = Regex("""src\s*[:=]\s*['"](https?://[^"']+)['"]""")
+                val iframeMatches = iframePattern.findAll(scriptText).toList()
+                
+                for (match in iframeMatches) {
+                    val src = match.groupValues[1]
+                    if (src.contains("player") || src.contains("embed") || src.contains("video")) {
+                        println("🎯 Iframe em script: $src")
+                        
+                        if (loadExtractor(fixUrl(src), iframeUrl, subtitleCallback, callback)) {
+                            return true
+                        }
+                    }
                 }
-                newExtractorLink(
-                    source = name,
-                    name = "\( name ( \){quality}p)",
-                    url = videoUrl,
-                    referer = url,
-                    quality = quality,
-                    isM3u8 = false
-                ).let { callback(it) }
+                
+                // Procurar por URLs de vídeo
+                val videoPatterns = listOf(
+                    Regex("""['"]file['"]\s*:\s*['"](https?://[^"']+)['"]"""),
+                    Regex("""['"]url['"]\s*:\s*['"](https?://[^"']+)['"]"""),
+                    Regex("""['"]src['"]\s*:\s*['"](https?://[^"']+)['"]"""),
+                    Regex("""videoUrl\s*[:=]\s*['"](https?://[^"']+)['"]""")
+                )
+                
+                for (pattern in videoPatterns) {
+                    val matches = pattern.findAll(scriptText).toList()
+                    for (match in matches) {
+                        val videoUrl = match.groupValues[1]
+                        if (videoUrl.contains(".m3u8") || videoUrl.contains(".mp4") || 
+                            videoUrl.contains("googlevideo")) {
+                            println("🎬 URL de vídeo em script: $videoUrl")
+                            
+                            callback(
+                                ExtractorLink(
+                                    name,
+                                    name,
+                                    videoUrl,
+                                    referer = iframeUrl,
+                                    quality = Qualities.Unknown.value,
+                                    isM3u8 = videoUrl.contains(".m3u8")
+                                )
+                            )
+                            return true
+                        }
+                    }
+                }
+            }
+            
+            // ESTRATÉGIA 2: Procurar iframes aninhados
+            val nestedIframes = doc.select("iframe[src]")
+            for (iframe in nestedIframes) {
+                val src = iframe.attr("src")
+                if (src.isNotBlank()) {
+                    println("🖼️ Iframe aninhado: $src")
+                    
+                    if (loadExtractor(fixUrl(src), iframeUrl, subtitleCallback, callback)) {
+                        return true
+                    }
+                }
+            }
+            
+            // ESTRATÉGIA 3: Tentar com WebView (último recurso)
+            println("🔄 Tentando com WebView...")
+            val webViewResult = loadWebViewLinks(iframeUrl, iframeUrl, subtitleCallback, callback)
+            if (webViewResult) {
+                println("✅ WebView funcionou!")
                 return true
             }
+            
+            false
+        } catch (e: Exception) {
+            println("💥 ERRO em loadMovieLinks: ${e.message}")
+            false
         }
-
-        // Fallback MP4 genérico (pra Google Storage direto)
-        val mp4Pattern = Regex("""https?://storage\.googleapis\.com/[^"'<>\s]+\.mp4""")
-        mp4Pattern.findAll(html).forEach { match ->
-            val videoUrl = match.value
-            if (videoUrl.length > 50 && !videoUrl.contains("banner") && !videoUrl.contains("ads")) {
-                newExtractorLink(
-                    source = name,
-                    name = name,
-                    url = videoUrl,
-                    referer = url,
-                    quality = Qualities.Unknown.value,
-                    isM3u8 = false
-                ).let { callback(it) }
-                return true
-            }
-        }
-
-        // Fallback pra loadExtractor (upns.one pra embedone, filmes e alguns episódios)
-        loadExtractor(url, mainUrl, subtitleCallback, callback)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
     }
-  }
-}
+
+    private suspend fun loadEpisodeLinks(
+        episodeId: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        println("🎬 Carregando links de EPISÓDIO...")
+        println("🆔 Episode ID: $episodeId")
+        
+        // URLs de API que o site pode usar
+        val apiUrls = listOf(
+            "https://assistirseriesonline.icu/wp-json/player/video/$episodeId",
+            "https://assistirseriesonline.icu/ajax/load_episode.php",
+            "https://assistirseriesonline.icu/wp-admin/admin-ajax.php"
+        )
+        
+        val headers = mapOf(
+            "User-Agent" to getUserAgent(),
+            "Referer" to mainUrl,
+            "X-Requested-With" to "XMLHttpRequest",
+            "Accept" to "application/json, text/javascript, */*; q=0.01",
+            "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8"
+        )
+        
+        // ESTRATÉGIA 1: Tentar API endpoints
+        for (apiUrl in apiUrls) {
+            try {
+                println("🔄 Tentando API: $apiUrl")
+                
+                val payload = when {
+                    apiUrl.contains("admin-ajax.php") -> mapOf(
+                        "action" to "load_episode",
+                        "episode_id" to episodeId
+                    )
+                    apiUrl.contains("load_episode.php") -> mapOf(
+                        "id" to episodeId
+                    )
+                    else -> null
+                }
+                
+                val response = if (payload != null) {
+                    app.post(apiUrl, headers = headers, data = payload)
+                } else {
+                    app.get(apiUrl, headers = headers)
+                }
+                
+                val responseText = response.text
+                println("📄 Resposta da API: ${responseText.take(500)}...")
+                
+                // Tentar extrair URL do vídeo da resposta
+                val videoPatterns = listOf(
+                    Regex("""['"]url['"]\s*:\s*['"](https?://[^"']+)['"]"""),
+                    Regex("""['"]src['"]\s*:\s*['"](https?://[^"']+)['"]"""),
+                    Regex("""<iframe[^>]+src=['"](https?://[^"']+)['"]"""),
+                    Regex("""(https?://[^"'\s]+\.m3u8[^"'\s]*)"""),
+                    Regex("""(https?://[^"'\s]+\.mp4[^"'\s]*)""")
+                )
+                
+                for (pattern in videoPatterns) {
+                    val matches = pattern.findAll(responseText).toList()
+                    for (match in matches) {
+                        val videoUrl = match.groupValues[1]
+                        if (videoUrl.isNotBlank() && 
+                            (videoUrl.contains(".m3u8") || videoUrl.contains(".mp4") || 
+                             videoUrl.contains("player") || videoUrl.contains("embed"))) {
+                            println("🎬 URL encontrada na API: $videoUrl")
+                            
+                            if (loadExtractor(fixUrl(videoUrl), mainUrl, subtitleCallback, callback)) {
+                                return true
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("⚠️ API falhou: ${e.message}")
+            }
+        }
+        
+        // ESTRATÉGIA 2: Construir URL direta do episódio
+        val episodeUrl = "https://assistirseriesonline.icu/episodio/$episodeId/"
+        println("🔗 Tentando URL direta: $episodeUrl")
+        
+        try {
+            val doc = app.get(episodeUrl, headers = mapOf(
+                "User-Agent" to getUserAgent(),
+                "Referer" to mainUrl
+            )).document
+            
+      
