@@ -90,7 +90,8 @@ class SuperFlix : MainAPI() {
         val url = "$mainUrl/?s=$query"
         // Usa headers para tentar evitar o bloqueio de pesquisa
         val response = app.get(url, headers = defaultHeaders)
-        val document = document
+                val document = response.document // Corrigido
+
 
         return document.select("a.card").mapNotNull { it.toSearchResponse() }
     }
