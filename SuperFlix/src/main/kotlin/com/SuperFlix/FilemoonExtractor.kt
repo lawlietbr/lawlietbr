@@ -89,7 +89,7 @@ class Filemoon : ExtractorApi() {
 
             val finalPlayerHtml = response.text
             println("FilemoonExtractor: Player HTML obtido (${finalPlayerHtml.length} chars)")
-
+println("FilemoonExtractor: DEBUG HTML: $finalPlayerHtml")
             // 7. Extrair M3U8
             val m3u8Url = extractM3u8Url(finalPlayerHtml)
 
