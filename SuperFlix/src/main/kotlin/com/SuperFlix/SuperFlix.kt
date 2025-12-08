@@ -3,7 +3,6 @@ package com.SuperFlix
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -24,15 +23,13 @@ class SuperFlix : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = request.data + if (page > 1) "?page=$page" else ""
         val document = app.get(url).document
-        
+
         val home = mutableListOf<SearchResponse>()
-        
-        // Estrutura dos recomendados
+
         document.select("div.recs-grid a.rec-card, .movie-card, article, .item").forEach { element ->
             element.toSearchResult()?.let { home.add(it) }
         }
-        
-        // Fallback: todos os links
+
         if (home.isEmpty()) {
             document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { link ->
                 val href = link.attr("href")
@@ -40,13 +37,13 @@ class SuperFlix : MainAPI() {
                     val title = link.selectFirst("img")?.attr("alt")
                         ?: link.selectFirst(".rec-title, .title, h2, h3")?.text()
                         ?: href.substringAfterLast("/").replace("-", " ").replace(Regex("\\d{4}$"), "").trim()
-                    
+
                     if (title.isNotBlank()) {
                         val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
                         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
                         val poster = link.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
                         val isSerie = href.contains("/serie/")
-                        
+
                         val searchResponse = if (isSerie) {
                             newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
                                 this.posterUrl = poster
@@ -58,13 +55,13 @@ class SuperFlix : MainAPI() {
                                 this.year = year
                             }
                         }
-                        
+
                         home.add(searchResponse)
                     }
                 }
             }
         }
-        
+
         return newHomePageResponse(request.name, home.distinctBy { it.url })
     }
 
@@ -72,22 +69,22 @@ class SuperFlix : MainAPI() {
         val title = selectFirst(".rec-title, .movie-title, h2, h3, .title")?.text()
             ?: selectFirst("img")?.attr("alt")
             ?: return null
-            
+
         val href = attr("href") ?: selectFirst("a")?.attr("href") ?: return null
-        
+
         val poster = selectFirst("img")?.attr("src")
             ?.takeIf { it.isNotBlank() }
             ?.let { fixUrl(it) }
             ?: selectFirst("img")?.attr("data-src")?.let { fixUrl(it) }
-        
+
         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
-            ?: selectFirst(".rec-meta, .movie-year, .year")?.text()?.let { 
-                Regex("\\b(\\d{4})\\b").find(it)?.groupValues?.get(1)?.toIntOrNull() 
+            ?: selectFirst(".rec-meta, .movie-year, .year")?.text()?.let {
+                Regex("\\b(\\d{4})\\b").find(it)?.groupValues?.get(1)?.toIntOrNull()
             }
-        
+
         val isSerie = href.contains("/serie/")
         val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
-        
+
         return if (isSerie) {
             newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
                 this.posterUrl = poster
@@ -104,51 +101,43 @@ class SuperFlix : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val document = app.get("$mainUrl/?s=$encodedQuery").document
-        
+
         val results = mutableListOf<SearchResponse>()
-        
+
         document.select("div.recs-grid a.rec-card, a[href*='/filme/'], a[href*='/serie/']").forEach { element ->
             element.toSearchResult()?.let { results.add(it) }
         }
-        
-        return results.distinctBy { it.url }
+
+        return results.distinctBy { it.url })
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
         val html = document.html()
 
-        // Extrair dados do JSON-LD
         val jsonLd = extractJsonLd(html)
-        
+
         val title = jsonLd.title ?: document.selectFirst("h1, .title")?.text() ?: return null
         val year = jsonLd.year ?: Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
-        
-        // Poster
+
         val poster = jsonLd.posterUrl?.replace("/w500/", "/original/")
             ?: document.selectFirst("meta[property='og:image']")?.attr("content")?.let { fixUrl(it) }
             ?.replace("/w500/", "/original/")
-        
-        // Sinopse
+
         val plot = jsonLd.description ?: document.selectFirst("meta[name='description']")?.attr("content")
             ?: document.selectFirst(".syn, .description")?.text()
-        
-        // Gêneros
+
         val tags = jsonLd.genres ?: document.select("a.chip, .chip").map { it.text() }
-        
-        // Atores
+
         val actors = jsonLd.actors?.map { Actor(it, "") } ?: emptyList()
-        
-        // Diretor
+
         val director = jsonLd.director?.firstOrNull()
-        
-        // Verificar se é série
+
         val isSerie = url.contains("/serie/") || jsonLd.type == "TVSeries"
-        
+
         return if (isSerie) {
-            // 🔥 NOVO: EXTRAIR EPISÓDIOS DOS BOTÕES PLAY
             val episodes = extractEpisodesFromButtons(document, url)
-            
+
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -158,9 +147,8 @@ class SuperFlix : MainAPI() {
                 addActors(actors)
             }
         } else {
-            // Para filmes, buscar iframe ou botão play
             val fembedUrl = findFembedUrl(document)
-            
+
             newMovieLoadResponse(title, url, TvType.Movie, fembedUrl ?: "") {
                 this.posterUrl = poster
                 this.year = year
@@ -172,20 +160,16 @@ class SuperFlix : MainAPI() {
         }
     }
 
-    // 🔥 NOVA FUNÇÃO: EXTRAIR EPISÓDIOS DOS BOTÕES PLAY
     private fun extractEpisodesFromButtons(document: org.jsoup.nodes.Document, baseUrl: String): List<Episode> {
         val episodes = mutableListOf<Episode>()
-        
-        // Procurar por botões PLAY com data-url
+
         document.select("button.bd-play[data-url]").forEach { button ->
             val fembedUrl = button.attr("data-url")
             val season = button.attr("data-season").toIntOrNull() ?: 1
             val episodeNum = button.attr("data-ep").toIntOrNull() ?: 1
-            
-            // Tentar encontrar o título do episódio
+
             var episodeTitle = "Episódio $episodeNum"
-            
-            // Procurar elemento pai que possa conter o título
+
             val parent = button.parents().find { it.hasClass("episode-item") || it.hasClass("episode") }
             parent?.let {
                 val titleElement = it.selectFirst(".ep-title, .title, .name, h3, h4")
@@ -193,7 +177,7 @@ class SuperFlix : MainAPI() {
                     episodeTitle = titleElement.text().trim()
                 }
             }
-            
+
             episodes.add(
                 newEpisode(fembedUrl) {
                     this.name = episodeTitle
@@ -202,19 +186,18 @@ class SuperFlix : MainAPI() {
                 }
             )
         }
-        
-        // Se não encontrou botões, tentar outra estrutura
+
         if (episodes.isEmpty()) {
             document.select(".episode-item, .episode, .episodio").forEachIndexed { index, episodeElement ->
                 val episodeNum = index + 1
                 val button = episodeElement.selectFirst("button.bd-play[data-url]")
                 val fembedUrl = button?.attr("data-url")
-                
+
                 if (fembedUrl != null) {
-                    val title = episodeElement.selectFirst(".ep-title, .title, .name")?.text() 
+                    val title = episodeElement.selectFirst(".ep-title, .title, .name")?.text()
                         ?: "Episódio $episodeNum"
                     val season = button.attr("data-season").toIntOrNull() ?: 1
-                    
+
                     episodes.add(
                         newEpisode(fembedUrl) {
                             this.name = title
@@ -225,46 +208,259 @@ class SuperFlix : MainAPI() {
                 }
             }
         }
-        
+
         return episodes
     }
 
-    // 🔥 NOVA FUNÇÃO: ENCONTRAR URL DO FEMBED
     private fun findFembedUrl(document: org.jsoup.nodes.Document): String? {
-        // 1. Primeiro: iframe direto
         val iframe = document.selectFirst("iframe[src*='fembed']")
         if (iframe != null) {
             return iframe.attr("src")
         }
-        
-        // 2. Segundo: botão PLAY com data-url
+
         val playButton = document.selectFirst("button.bd-play[data-url]")
         if (playButton != null) {
             return playButton.attr("data-url")
         }
-        
-        // 3. Terceiro: qualquer botão com data-url contendo fembed
+
         val anyButton = document.selectFirst("button[data-url*='fembed']")
         if (anyButton != null) {
             return anyButton.attr("data-url")
         }
-        
-        // 4. Quarto: procurar em scripts
+
         val html = document.html()
         val patterns = listOf(
             Regex("""https?://fembed\.sx/e/\d+"""),
             Regex("""data-url=["'](https?://[^"']+fembed[^"']+)["']"""),
             Regex("""src\s*[:=]\s*["'](https?://[^"']+fembed[^"']+)["']""")
         )
-        
+
         patterns.forEach { pattern ->
             pattern.find(html)?.let { match ->
                 val url = if (match.groupValues.size > 1) match.groupValues[1] else match.value
                 if (url.isNotBlank()) return url
             }
         }
-        
+
         return null
+    }
+
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        println("SuperFlix DEBUG: loadLinks chamado com data = '$data'")
+
+        return try {
+            // Extrair ID do Fembed da URL
+            val fembedId = extractFembedId(data)
+            println("SuperFlix DEBUG: Fembed ID extraído = '$fembedId'")
+
+            if (fembedId.isBlank()) {
+                println("SuperFlix DEBUG: Não foi possível extrair Fembed ID")
+                return false
+            }
+
+            // ESTRATÉGIA 1: Primeiro tentar o extrator normal do CloudStream
+            val fembedUrl = "https://fembed.sx/v/$fembedId"
+            println("SuperFlix DEBUG: Tentando extrator normal: '$fembedUrl'")
+
+            if (loadExtractor(fembedUrl, "$mainUrl/", subtitleCallback, callback)) {
+                println("SuperFlix DEBUG: ✅ Extrator normal funcionou!")
+                return true
+            }
+
+            // ESTRATÉGIA 2: Tentar com domínio alternativo
+            val fembedUrl2 = "https://www.fembed.com/v/$fembedId"
+            println("SuperFlix DEBUG: Tentando domínio alternativo: '$fembedUrl2'")
+
+            if (loadExtractor(fembedUrl2, "$mainUrl/", subtitleCallback, callback)) {
+                println("SuperFlix DEBUG: ✅ Domínio alternativo funcionou!")
+                return true
+            }
+
+            // ESTRATÉGIA 3: API DIRETA DO FEMBED (SOLUÇÃO PRINCIPAL)
+            println("SuperFlix DEBUG: 🚀 Tentando API direta do Fembed...")
+            val success = tryFembedApiDirect(fembedId, callback)
+
+            if (success) {
+                println("SuperFlix DEBUG: ✅ API direta do Fembed funcionou!")
+                return true
+            }
+
+            // ESTRATÉGIA 4: Fallback para streamtape se houver
+            println("SuperFlix DEBUG: Tentando fallback para Streamtape...")
+            val streamtapeUrl = findStreamtapeUrl(data)
+            if (streamtapeUrl != null && loadExtractor(streamtapeUrl, "$mainUrl/", subtitleCallback, callback)) {
+                println("SuperFlix DEBUG: ✅ Streamtape funcionou!")
+                return true
+            }
+
+            println("SuperFlix DEBUG: ❌ Nenhuma estratégia funcionou")
+            false
+
+        } catch (e: Exception) {
+            println("SuperFlix DEBUG: Erro em loadLinks: ${e.message}")
+            e.printStackTrace()
+            false
+        }
+    }
+
+    // Função para extrair ID do Fembed
+    private fun extractFembedId(data: String): String {
+        // Padrões possíveis:
+        // https://fembed.sx/e/304115/1-1
+        // https://fembed.sx/v/304115/1-1
+        // /e/304115/1-1
+        // 304115/1-1
+        // 304115
+
+        val patterns = listOf(
+            Regex("""(?:fembed\.(?:sx|com|to))/(?:e|v|f)/(\d+(?:/\d+-\d+)?)"""),
+            Regex("""/(?:e|v|f)/(\d+(?:/\d+-\d+)?)"""),
+            Regex("""(\d+(?:/\d+-\d+)?)""")
+        )
+
+        for (pattern in patterns) {
+            val match = pattern.find(data)
+            if (match != null && match.groupValues.size > 1) {
+                val id = match.groupValues[1]
+                println("SuperFlix DEBUG: Padrão encontrado: '${pattern.pattern}' -> '$id'")
+                return id
+            }
+        }
+
+        return data
+    }
+
+    // API DIRETA DO FEMBED - FUNCIONA SEM DEPENDER DO EXTRACTOR DO CLOUDSTREAM
+    private suspend fun tryFembedApiDirect(fembedId: String, callback: (ExtractorLink) -> Unit): Boolean {
+        try {
+            // Tentar diferentes domínios da API do Fembed
+            val domains = listOf(
+                "https://www.fembed.com",
+                "https://fembed.sx",
+                "https://fembed.to"
+            )
+
+            for (domain in domains) {
+                try {
+                    val apiUrl = "$domain/api/source/$fembedId"
+                    println("SuperFlix DEBUG: Tentando API: $apiUrl")
+
+                    val headers = mapOf(
+                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Referer" to "$domain/",
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    )
+
+                    val response = app.post(
+                        apiUrl,
+                        headers = headers,
+                        data = mapOf(
+                            "r" to "",
+                            "d" to domain.replace("https://", "")
+                        )
+                    )
+
+                    val json = response.parsedSafe<Map<String, Any>>()
+                    println("SuperFlix DEBUG: Resposta da API: ${json?.keys}")
+
+                    if (json?.get("success") == true) {
+                        val data = json["data"] as? List<Map<String, Any>>
+                        if (data != null && data.isNotEmpty()) {
+                            println("SuperFlix DEBUG: Encontrados ${data.size} streams")
+
+                            data.forEach { item ->
+                                val file = item["file"]?.toString()
+                                val label = item["label"]?.toString()
+
+                                if (file != null && file.isNotBlank()) {
+                                    val quality = getQualityFromLabel(label ?: "Unknown")
+                                    val isM3u8 = file.contains(".m3u8") || file.contains("master.m3u8")
+
+                                    callback.invoke(
+                                        ExtractorLink(
+                                            name = "Fembed",
+                                            source = "$name ($domain)",
+                                            url = file,
+                                            referer = "$domain/",
+                                            quality = quality,
+                                            isM3u8 = isM3u8,
+                                            headers = mapOf(
+                                                "Referer" to "$domain/",
+                                                "Origin" to domain
+                                            )
+                                        )
+                                    )
+
+                                    println("SuperFlix DEBUG: Adicionado stream: $quality - $file")
+                                }
+                            }
+
+                            return true
+                        }
+                    } else {
+                        println("SuperFlix DEBUG: API retornou success=false")
+                    }
+                } catch (e: Exception) {
+                    println("SuperFlix DEBUG: Erro com domínio $domain: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            println("SuperFlix DEBUG: Erro geral na API Fembed: ${e.message}")
+        }
+
+        return false
+    }
+
+    // Função para encontrar URLs do Streamtape (fallback)
+    private fun findStreamtapeUrl(data: String): String? {
+        val patterns = listOf(
+            Regex("""https?://(?:www\.)?streamtape\.(?:com|to)/[^"\s]+"""),
+            Regex("""data-url=["'](https?://[^"']+streamtape[^"']+)["']"""),
+            Regex("""(https?://[^"\s]+\.(?:mp4|m3u8|mkv))""")
+        )
+
+        val html = if (data.contains("<")) data else ""
+        for (pattern in patterns) {
+            val match = pattern.find(data)
+            if (match != null) {
+                val url = match.value
+                println("SuperFlix DEBUG: Encontrado Streamtape URL: $url")
+                return url
+            }
+        }
+
+        return null
+    }
+
+    // Converter label para qualidade
+    private fun getQualityFromLabel(label: String): Qualities {
+        return when {
+            label.contains("1080") || label.contains("FHD") -> Qualities.P1080
+            label.contains("720") || label.contains("HD") -> Qualities.P720
+            label.contains("480") -> Qualities.P480
+            label.contains("360") -> Qualities.P360
+            label.contains("240") -> Qualities.P240
+            label.contains("144") -> Qualities.P144
+            else -> {
+                // Tentar extrair número da qualidade
+                val numMatch = Regex("""(\d+)""").find(label)
+                numMatch?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
+                    when (num) {
+                        in 1080..2160 -> Qualities.P1080
+                        in 720..1079 -> Qualities.P720
+                        in 480..719 -> Qualities.P480
+                        in 360..479 -> Qualities.P360
+                        else -> Qualities.Unknown
+                    }
+                } ?: Qualities.Unknown
+            }
+        }
     }
 
     private data class JsonLdInfo(
@@ -282,45 +478,45 @@ class SuperFlix : MainAPI() {
     private fun extractJsonLd(html: String): JsonLdInfo {
         val pattern = Regex("<script type=\"application/ld\\+json\">(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
         val matches = pattern.findAll(html)
-        
+
         matches.forEach { match ->
             try {
                 val json = match.groupValues[1].trim()
                 if (json.contains("\"@type\":\"Movie\"") || json.contains("\"@type\":\"TVSeries\"")) {
-                    
+
                     val title = Regex("\"name\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
                     val image = Regex("\"image\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
                     val description = Regex("\"description\":\"([^\"]+)\"").find(json)?.groupValues?.get(1)
-                    
+
                     val genresMatch = Regex("\"genre\":\\s*\\[([^\\]]+)\\]").find(json)
                     val genres = genresMatch?.groupValues?.get(1)
                         ?.split(",")
                         ?.map { it.trim().trim('"', '\'') }
                         ?.filter { it.isNotBlank() }
-                    
+
                     val actorsMatch = Regex("\"actor\":\\s*\\[([^\\]]+)\\]").find(json)
                     val actors = actorsMatch?.groupValues?.get(1)
                         ?.split("},")
                         ?.mapNotNull { actor ->
                             Regex("\"name\":\"([^\"]+)\"").find(actor)?.groupValues?.get(1)
                         }
-                    
+
                     val directorMatch = Regex("\"director\":\\s*\\[([^\\]]+)\\]").find(json)
                     val director = directorMatch?.groupValues?.get(1)
                         ?.split("},")
                         ?.mapNotNull { dir ->
                             Regex("\"name\":\"([^\"]+)\"").find(dir)?.groupValues?.get(1)
                         }
-                    
+
                     val sameAsMatch = Regex("\"sameAs\":\\s*\\[([^\\]]+)\\]").find(json)
                     val tmdbId = sameAsMatch?.groupValues?.get(1)
                         ?.split(",")
                         ?.find { it.contains("themoviedb.org") }
                         ?.substringAfterLast("/")
                         ?.trim(' ', '"', '\'')
-                    
+
                     val type = if (json.contains("\"@type\":\"Movie\"")) "Movie" else "TVSeries"
-                    
+
                     return JsonLdInfo(
                         title = title,
                         year = null,
@@ -337,121 +533,7 @@ class SuperFlix : MainAPI() {
                 // Continua
             }
         }
-        
+
         return JsonLdInfo()
     }
-
-    override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
-    println("SuperFlix DEBUG: loadLinks chamado com data = '$data'")
-    
-    return try {
-        // CASO 1: Se data já é URL completa do Fembed
-        if (data.contains("fembed")) {
-            println("SuperFlix DEBUG: URL do Fembed detectada")
-            
-            val cleanUrl = when {
-                data.startsWith("//") -> "https:$data"
-                data.startsWith("/") && data.contains("fembed") -> {
-                    // Formato: /e/71694/1-2 → https://fembed.sx/e/71694/1-2
-                    if (data.startsWith("/e/") || data.startsWith("/v/") || data.startsWith("/f/")) {
-                        "https://fembed.sx$data"
-                    } else {
-                        "https://fembed.sx$data"
-                    }
-                }
-                else -> data
-            }
-            
-            println("SuperFlix DEBUG: URL limpa = '$cleanUrl'")
-            
-            // Tentar carregar o extractor com referer do SuperFlix
-            if (loadExtractor(cleanUrl, "$mainUrl/", subtitleCallback, callback)) {
-                println("SuperFlix DEBUG: Extractor funcionou!")
-                return true
-            }
-            
-            // Se não funcionou, tentar com referer nulo
-            if (loadExtractor(cleanUrl, null, subtitleCallback, callback)) {
-                println("SuperFlix DEBUG: Extractor funcionou sem referer")
-                return true
-            }
-            
-            // Tentar alternar domínio fembed.sx ↔ fembed.com
-            val altUrl = if (cleanUrl.contains("fembed.sx")) {
-                cleanUrl.replace("fembed.sx", "www.fembed.com")
-            } else {
-                cleanUrl.replace("www.fembed.com", "fembed.sx")
-            }
-            
-            if (loadExtractor(altUrl, "$mainUrl/", subtitleCallback, callback)) {
-                println("SuperFlix DEBUG: Extractor funcionou com URL alternativa")
-                return true
-            }
-        }
-        
-        // CASO 2: Se é caminho parcial (ex: /e/71694/1-2)
-        else if (data.startsWith("/e/") || data.startsWith("/v/") || data.startsWith("/f/")) {
-            println("SuperFlix DEBUG: Caminho Fembed detectado: '$data'")
-            
-            // Construir URL completa
-            val fembedUrl = "https://fembed.sx$data"
-            println("SuperFlix DEBUG: URL construída: '$fembedUrl'")
-            
-            // Tentar carregar o extractor
-            if (loadExtractor(fembedUrl, "$mainUrl/", subtitleCallback, callback)) {
-                println("SuperFlix DEBUG: Extractor funcionou para caminho")
-                return true
-            }
-            
-            // Tentar com www.fembed.com
-            val fembedUrl2 = "https://www.fembed.com$data"
-            if (loadExtractor(fembedUrl2, "$mainUrl/", subtitleCallback, callback)) {
-                println("SuperFlix DEBUG: Extractor funcionou para caminho com www")
-                return true
-            }
-        }
-        
-        // CASO 3: Se for URL da página do episódio (menos comum)
-        else if (data.contains("/episodio/") || data.contains("?ep=")) {
-            println("SuperFlix DEBUG: URL de página de episódio detectada")
-            
-            val finalUrl = if (data.startsWith("http")) data else fixUrl(data)
-            val res = app.get(finalUrl, referer = mainUrl)
-            val html = res.text
-            
-            // Procurar URLs do Fembed no HTML
-            val patterns = listOf(
-                Regex("""data-url=["'](https?://[^"']+fembed[^"']+)["']"""),
-                Regex("""(https?://[^"'\s]+fembed[^"'\s]+/[evf]/\d+[^"'\s]*)"""),
-                Regex("""<iframe[^>]+src=["'](https?://[^"']+fembed[^"']+)["']""")
-            )
-            
-            for (pattern in patterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    val url = if (match.groupValues.size > 1) match.groupValues[1] else match.value
-                    println("SuperFlix DEBUG: URL encontrada no HTML: '$url'")
-                    
-                    if (loadExtractor(url, finalUrl, subtitleCallback, callback)) {
-                        println("SuperFlix DEBUG: Extractor funcionou para URL encontrada")
-                        return true
-                    }
-                }
-            }
-        }
-        
-        println("SuperFlix DEBUG: Nenhuma estratégia funcionou")
-        false
-        
-    } catch (e: Exception) {
-        println("SuperFlix DEBUG: Erro: ${e.message}")
-        e.printStackTrace()
-        false
-    }
-  }
 }
