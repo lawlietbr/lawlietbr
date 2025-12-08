@@ -5,11 +5,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import com.lagradost.cloudstream3.utils.ExtractorApi
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.loadExtractor
-
 
 class SuperFlix : MainAPI() {
     override var mainUrl = "https://superflix21.lol"
@@ -387,20 +382,20 @@ class SuperFlix : MainAPI() {
                                     val quality = getQualityFromLabel(label ?: "Unknown")
                                     val isM3u8 = file.contains(".m3u8") || file.contains("master.m3u8")
 
-                                    // ✅ CORREÇÃO AQUI: Usando ExtractorLink construtor
-                                    // O CloudStream usa versões diferentes, vamos usar o construtor básico
-                                    val link = ExtractorLink(
+                                    // ✅ CORREÇÃO: Usando newExtractorLink corretamente
+                                    val link = newExtractorLink(
+                                        url = file,
                                         source = name,
                                         name = label ?: "Fembed",
-                                        url = file,
+                                        quality = quality,
                                         referer = "$domain/",
-                                        quality = quality, // Já é Int
                                         isM3u8 = isM3u8
                                     )
                                     
-                                    callback.invoke(link)
-
-                                    println("SuperFlix DEBUG: Adicionado stream: $label - $file")
+                                    if (link != null) {
+                                        callback.invoke(link)
+                                        println("SuperFlix DEBUG: Adicionado stream: $label - $file")
+                                    }
                                 }
                             }
 
@@ -440,7 +435,7 @@ class SuperFlix : MainAPI() {
         return null
     }
 
-    // ✅ CORREÇÃO AQUI: Converter label para Int (não Qualities)
+    // Converter label para qualidade (Int)
     private fun getQualityFromLabel(label: String): Int {
         return when {
             label.contains("1080") || label.contains("FHD") -> Qualities.P1080.value
