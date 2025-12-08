@@ -41,7 +41,8 @@ class FembedExtractor : ExtractorApi() {
                             val label = stream.label ?: "Unknown"
                             val isM3u8 = file.contains(".m3u8")
                             
-                            // Usar newExtractorLink em vez do construtor deprecated
+                            // Usando newExtractorLink com parâmetros corretos
+                            // A ordem correta é: url, source, name, quality, referer, isM3u8
                             newExtractorLink(
                                 url = file,
                                 source = name,
