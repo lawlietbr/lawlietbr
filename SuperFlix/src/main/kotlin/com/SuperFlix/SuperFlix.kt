@@ -3,8 +3,9 @@ package com.SuperFlix
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.utils.ExtractorLink // 🔥 CORREÇÃO 1: Import Explícito para resolver Unresolved reference
 import com.lagradost.cloudstream3.utils.ExtractorLink.Companion.newExtractorLink
-import com.lagradost.cloudstream3.utils.AppUtils.base64Encode // Resolvido: import explícito
+import com.lagradost.cloudstream3.utils.AppUtils // 🔥 CORREÇÃO 2: Import Explícito para usar base64Encode
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -23,7 +24,7 @@ class SuperFlix : MainAPI() {
     )
 
     // --------------------------------------------------------------------------------
-    // FUNÇÕES INICIAIS (getMainPage, toSearchResult, search) - MANTIDAS
+    // FUNÇÕES INICIAIS (getMainPage, toSearchResult, search)
     // --------------------------------------------------------------------------------
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -266,8 +267,8 @@ class SuperFlix : MainAPI() {
             val apiPath = apiMatch?.groupValues?.get(1)?.replace("\\/", "/") ?: return null
             val apiFullUrl = fixUrl(apiPath)
             
-            // CORREÇÃO: Conversão para ByteArray para base64Encode
-            val keyB64 = base64Encode(key.toByteArray()) 
+            // CORREÇÃO: Usando AppUtils.base64Encode explicitamente
+            val keyB64 = AppUtils.base64Encode(key.toByteArray()) 
             
             val postBody = mapOf(
                 "action" to "getPlayer",
@@ -322,20 +323,18 @@ class SuperFlix : MainAPI() {
             
             val m3u8Match = Regex("""\s*["']file["']\s*:\s*["'](https?://[^"']+\.m3u8[^"']*)["']""").find(json)
             
-            val m3u8Link = m3u8Match?.groupValues?.get(1)
-            
-            if (m3u8Link != null) {
+            // 🔥 CORREÇÃO 3: Usando ?.let para evitar erro de 'val' reassignment na linha 341
+            m3u8Match?.groupValues?.get(1)?.let { m3u8Link ->
                 val quality = extractQualityFromUrl(m3u8Link)
                 
-                // CORREÇÃO: Usando o bloco initializer para definir referer, quality e isM3u8
                 callback.invoke(
                     newExtractorLink( 
-                        name,                          // source (Argumento 1)
-                        "$name (Fembed ${quality}p)",  // name (Argumento 2)
-                        m3u8Link,                      // url (Argumento 3)
-                        null                           // type (Argumento 4 - null/opcional)
+                        name,                          // source
+                        "$name (Fembed ${quality}p)",  // name
+                        m3u8Link,                      // url
+                        null                           // type (opcional)
                     ) {
-                        // Propriedades definidas no bloco de inicialização (trailing lambda)
+                        // Propriedades definidas no bloco de inicialização
                         this.referer = fembedUrl
                         this.quality = quality
                         this.isM3u8 = true
@@ -411,7 +410,6 @@ class SuperFlix : MainAPI() {
     // --------------------------------------------------------------------------------
 
     private data class JsonLdInfo(
-        // ... (data class original)
         val title: String? = null,
         val year: Int? = null,
         val posterUrl: String? = null,
