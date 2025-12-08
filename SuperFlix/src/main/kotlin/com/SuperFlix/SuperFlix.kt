@@ -47,7 +47,6 @@ class SuperFlix : MainAPI() {
                     val imgElement = link.selectFirst("img")
                     val altTitle = imgElement?.attr("alt") ?: ""
                     
-                    // CORREÇÃO: Usar variável intermediária para o elemento de título
                     val titleElement = link.selectFirst(".rec-title, .title, h2, h3")
                     val elementTitle = titleElement?.text() ?: ""
                     
@@ -91,7 +90,6 @@ class SuperFlix : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         println("SuperFlix: toSearchResult - Iniciando para elemento: ${this.tagName()}")
         
-        // CORREÇÃO: Armazenar o elemento primeiro, depois acessar o texto
         val titleElement = selectFirst(".rec-title, .movie-title, h2, h3, .title")
         val title = titleElement?.text()
             ?: selectFirst("img")?.attr("alt")
@@ -99,7 +97,6 @@ class SuperFlix : MainAPI() {
 
         println("SuperFlix: toSearchResult - Título encontrado: $title")
         
-        // CORREÇÃO: Armazenar href de forma segura
         val elementHref = attr("href")
         val href = if (elementHref.isNotBlank()) elementHref else selectFirst("a")?.attr("href")
         
@@ -188,7 +185,6 @@ class SuperFlix : MainAPI() {
         val jsonLd = extractJsonLd(html)
         println("SuperFlix: load - JSON-LD extraído: title=${jsonLd.title}, type=${jsonLd.type}")
 
-        // Usar valores extraídos do JSON-LD ou fallback para scraping
         val titleElement = document.selectFirst("h1, .title")
         val scrapedTitle = titleElement?.text()
         
@@ -250,7 +246,6 @@ class SuperFlix : MainAPI() {
             }
         } else {
             println("SuperFlix: load - Processando como FILME")
-            // Para filmes, extrair a URL do player
             val playerUrl = findPlayerUrl(document)
             println("SuperFlix: load - URL do player encontrada: $playerUrl")
             
@@ -339,9 +334,13 @@ class SuperFlix : MainAPI() {
         println("SuperFlix: findPlayerUrl - Links de vídeo encontrados: ${videoLinks.size}")
         
         if (videoLinks.isNotEmpty()) {
-            val url = videoLinks.first().attr("href")
-            println("SuperFlix: findPlayerUrl - URL encontrada em link: $url")
-            return url
+            // CORREÇÃO: Usar safe call para first() e attr()
+            val firstVideoLink = videoLinks.firstOrNull()
+            val url = firstVideoLink?.attr("href")
+            if (!url.isNullOrBlank()) {
+                println("SuperFlix: findPlayerUrl - URL encontrada em link: $url")
+                return url
+            }
         }
 
         println("SuperFlix: findPlayerUrl - Nenhuma URL de player encontrada")
@@ -377,7 +376,6 @@ class SuperFlix : MainAPI() {
         }
     }
 
-    // Data class para armazenar informações do JSON-LD
     private data class JsonLdInfo(
         val title: String? = null,
         val year: Int? = null,
