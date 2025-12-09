@@ -179,67 +179,65 @@ class SuperFlix : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        println("SuperFlix: loadLinks - Iniciando para: $data")
-        
-        // Primeiro, tentar o método padrão com extractors
-        if (data.contains("filemoon.") || data.contains("fembed.") || data.contains("ico3c.")) {
-            println("SuperFlix: loadLinks - Usando extractor Filemoon")
-            try {
-                com.lagradost.cloudstream3.extractors.Filemoon().getUrl(
-                    url = data,
-                    referer = "$mainUrl/",
-                    subtitleCallback = subtitleCallback,
-                    callback = callback
-                )
-                return true
-            } catch (e: Exception) {
-                println("SuperFlix: loadLinks - Filemoon falhou: ${e.message}")
-            }
-        }
-
-        // Tentar loadExtractor genérico
-        if (loadExtractor(data, subtitleCallback, callback)) {
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    println("SuperFlix: loadLinks - Iniciando para: $data")
+    
+    // Primeiro, tentar o método padrão com extractors
+    if (data.contains("filemoon.") || data.contains("fembed.") || data.contains("ico3c.")) {
+        println("SuperFlix: loadLinks - Usando extractor Filemoon")
+        try {
+            com.lagradost.cloudstream3.extractors.Filemoon().getUrl(
+                url = data,
+                referer = "$mainUrl/",
+                subtitleCallback = subtitleCallback,
+                callback = callback
+            )
             return true
+        } catch (e: Exception) {
+            println("SuperFlix: loadLinks - Filemoon falhou: ${e.message}")
         }
-
-        // Se não funcionar, tentar sniffing de rede
-        if (sniffingEnabled) {
-            println("SuperFlix: loadLinks - Iniciando network sniffing")
-            val videoUrls = sniffVideoUrls(data)
-            
-            if (videoUrls.isNotEmpty()) {
-                println("SuperFlix: loadLinks - ${videoUrls.size} URL(s) de vídeo encontrada(s) via sniffing")
-                videoUrls.forEach { videoUrl ->
-                    val quality = detectQualityFromUrl(videoUrl)
-                    val source = detectSourceFromUrl(videoUrl)
-                    
-                    // CORREÇÃO: Usando newExtractorLink corretamente
-                    val link = newExtractorLink(
-                        source = name,
-                        name = "$source (${quality}p)",
-                        url = videoUrl
-                    ) {
-                        this.referer = data
-                        this.quality = quality
-                        this.isM3u8 = videoUrl.contains(".m3u8")
-                    }
-                    
-                    callback.invoke(link)
-                    println("SuperFlix: loadLinks - Link adicionado: $source - Qualidade: $quality")
-                }
-                return true
-            }
-        }
-
-        println("SuperFlix: loadLinks - Nenhum método funcionou")
-        return false
     }
 
+    // Tentar loadExtractor genérico
+    if (loadExtractor(data, subtitleCallback, callback)) {
+        return true
+    }
+
+    // Se não funcionar, tentar sniffing de rede
+    if (sniffingEnabled) {
+        println("SuperFlix: loadLinks - Iniciando network sniffing")
+        val videoUrls = sniffVideoUrls(data)
+        
+        if (videoUrls.isNotEmpty()) {
+            println("SuperFlix: loadLinks - ${videoUrls.size} URL(s) de vídeo encontrada(s) via sniffing")
+            videoUrls.forEach { videoUrl ->
+                val quality = detectQualityFromUrl(videoUrl)
+                val source = detectSourceFromUrl(videoUrl)
+                
+                // CORREÇÃO: Usando os parâmetros diretamente no newExtractorLink
+                val link = newExtractorLink(
+                    source = name,
+                    name = "$source (${quality}p)",
+                    url = videoUrl,
+                    referer = data,
+                    quality = quality,
+                    isM3u8 = videoUrl.contains(".m3u8")
+                )
+                
+                callback.invoke(link)
+                println("SuperFlix: loadLinks - Link adicionado: $source - Qualidade: $quality")
+            }
+            return true
+        }
+    }
+
+    println("SuperFlix: loadLinks - Nenhum método funcionou")
+    return false
+}
     // ========== MÉTODOS DE NETWORK SNIFFING ==========
     
     private suspend fun sniffVideoUrls(pageUrl: String): List<String> {
