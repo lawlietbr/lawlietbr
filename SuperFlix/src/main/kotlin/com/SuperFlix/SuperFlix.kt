@@ -74,44 +74,23 @@ class SuperFlix : MainAPI() {
     // BUSCA
     // =========================================================================
   override suspend fun search(query: String): List<SearchResponse> {
-    println("🔍 SuperFlix: Buscando '$query'")
-    
-    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-    val searchUrl = "$mainUrl/?s=$encodedQuery"
-    println("🔍 URL: $searchUrl")
-    
+    val searchUrl = "$mainUrl/?s=${java.net.URLEncoder.encode(query, "UTF-8")}"
     val document = app.get(searchUrl).document
     
-    // PRIMEIRO: Tenta os cards dentro do .grid (baseado nos logs)
-    var results = document.select("div.grid a.card, .grid a.card").mapNotNull { 
-        it.toSearchResult() 
-    }
+    // DEBUG para ver o que está encontrando
+    println("🔍 SuperFlix search: Buscando '$query'")
+    println("🔍 URL: $searchUrl")
     
-    // SEGUNDO: Se não encontrou, tenta qualquer link dentro de .grid
-    if (results.isEmpty()) {
-        println("⚠️ Nenhum 'a.card' dentro de .grid encontrado. Tentando todos os links dentro de .grid...")
-        results = document.select("div.grid a, .grid a").mapNotNull { 
-            it.toSearchResult() 
+    val results = document.select("div.grid a, .grid a").mapNotNull { element ->
+        val result = element.toSearchResult()
+        if (result != null) {
+            println("✅ Encontrado: ${result.name} (URL: ${result.url})")
         }
-    }
+        result
+    }.distinctBy { it.url }
     
-    // TERCEIRO: Se ainda não encontrou, procura qualquer link com href de filme/série
-    if (results.isEmpty()) {
-        println("⚠️ Nenhum link dentro de .grid encontrado. Tentando busca genérica...")
-        document.select("a").forEach { link ->
-            val href = link.attr("href")
-            if ((href.contains("/filme/") || href.contains("/serie/")) && 
-                !href.contains("category") && !href.contains("tag")) {
-                link.toSearchResult()?.let { 
-                    results = results + it 
-                    println("✅ Encontrado via fallback: ${it.title}")
-                }
-            }
-        }
-    }
-    
-    println("✅ SuperFlix: ${results.size} resultados para '$query'")
-    return results.distinctBy { it.url }
+    println("🔍 Total resultados: ${results.size}")
+    return results
 }
     // =========================================================================
     // CARREGAR DETALHES (COM TMDB INTEGRADO)
