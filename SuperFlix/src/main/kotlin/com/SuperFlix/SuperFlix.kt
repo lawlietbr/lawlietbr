@@ -14,7 +14,7 @@ class SuperFlix : MainAPI() {
     override var lang = "pt-br"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    override val useMpv = true // Ativar player MPV para HLS
+    // Removido: override val useMpv = true // Esta propriedade não existe em MainAPI
 
     override val mainPage = mainPageOf(
         "$mainUrl/filmes" to "Filmes",
