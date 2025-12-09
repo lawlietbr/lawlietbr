@@ -55,7 +55,7 @@ class SuperFlix : MainAPI() {
         val localPoster = selectFirst("img")?.attr("src")?.let { fixUrl(it) }
         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
         val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
-        val isSerie = href.contains("/serie/")
+        val isSerie = href.contains("/serie/") || selectFirst(".badge-kind")?.text() == "SÉRIE"
 
         return if (isSerie) {
             newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
@@ -71,13 +71,45 @@ class SuperFlix : MainAPI() {
     }
 
     // =========================================================================
-    // BUSCA
+    // BUSCA CORRIGIDA - USANDO A URL /buscar?q=
     // =========================================================================
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchUrl = "$mainUrl/?s=${java.net.URLEncoder.encode(query, "UTF-8")}"
+        val searchUrl = "$mainUrl/buscar?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         val document = app.get(searchUrl).document
 
-        return document.select("a.card").mapNotNull { it.toSearchResult() }
+        // Seletor corrigido: elementos .card dentro de .grid
+        return document.select(".grid .card").mapNotNull { card ->
+            try {
+                val title = card.attr("title")
+                val href = card.attr("href")
+                if (title.isNullOrEmpty() || href.isNullOrEmpty()) return@mapNotNull null
+
+                val poster = card.selectFirst("img")?.attr("src")?.let { fixUrl(it) }
+                val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
+                val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
+                
+                // Verifica se é série pelo badge ou pela URL
+                val badge = card.selectFirst(".badge-kind")?.text()?.lowercase()
+                val isSerie = badge?.contains("série") == true || 
+                             badge?.contains("serie") == true || 
+                             href.contains("/serie/")
+
+                if (isSerie) {
+                    newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
+                        this.posterUrl = poster
+                        this.year = year
+                    }
+                } else {
+                    newMovieSearchResponse(cleanTitle, fixUrl(href), TvType.Movie) {
+                        this.posterUrl = poster
+                        this.year = year
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ Erro ao processar card de busca: ${e.message}")
+                null
+            }
+        }
     }
 
     // =========================================================================
@@ -409,4 +441,3 @@ class SuperFlix : MainAPI() {
         }
     }
 }
-
