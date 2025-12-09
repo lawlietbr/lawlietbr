@@ -293,23 +293,19 @@ class SuperFlix : MainAPI() {
             }
             
             // 3. Montar a URL completa da API Intermediária (ico3c.com)
-            val baseUrlAPI = "https://ico3c.com/dl?view/file=$fileCode&hash=$dynamicHash"
+        val baseUrlAPI = "https://ico3c.com/dl?view/file=$fileCode&hash=$dynamicHash"
+        val fixedParams = "&embed=1&prem=&referer=fembed.sx&vb=0&adb=0&cx=198&cy=394&device=Mobile%2FAndroid&browser=Chrome&ww=393&wh=768&gpuv=Google%20Inc.%20(Qualcomm)"
+        val urlAPICompleta = "$baseUrlAPI$fixedParams"
+        println("SuperFlix: extractFilemoon - API Intermediária construída: $urlAPICompleta")
 
-            val fixedParams = "&embed=1&prem=&referer=fembed.sx&vb=0&adb=0&cx=198&cy=394&device=Mobile%2FAndroid&browser=Chrome&ww=393&wh=768&gpuv=Google%20Inc.%20(Qualcomm)"
-
-            val urlAPICompleta = "$baseUrlAPI$fixedParams"
-
-            println("SuperFlix: extractFilemoon - API Intermediária construída: $urlAPICompleta")
-
-            // Passo 4: Chamar a API Intermediária (GET)
-            val respostaTokenizada = app.get(
-                urlAPICompleta,
-                headers = mapOf(
-                    "Referer" to filemoonUrl, 
-                    "Accept" to "*/*" 
-                )
-            ).text
-
+        // Passo 4: Chamar a API Intermediária (GET)
+        val respostaTokenizada = app.get(
+            urlAPICompleta,
+            headers = mapOf(
+                "Referer" to filemoonUrl, 
+                "Accept" to "*/*" 
+            )
+        ).text
             // Passo 5: Analisar a resposta para o link final do .m3u8
             // REGEX CORRIGIDO: Mais abrangente para capturar URLs de streaming.
             val linkM3u8 = Regex("""https?://[^"']*?\.m3u8[^"']*""").find(respostaTokenizada)?.value
