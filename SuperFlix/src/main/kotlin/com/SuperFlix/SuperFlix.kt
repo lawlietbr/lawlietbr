@@ -15,10 +15,14 @@ class SuperFlix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
     override val usesWebView = true
 
+    // =========================================================================
+    // PÁGINA PRINCIPAL - REORDENADA
+    // "Primeira Exibição" como PRIMEIRA aba
+    // =========================================================================
     override val mainPage = mainPageOf(
-        "$mainUrl/filmes" to "Filmes",
-        "$mainUrl/series" to "Séries",
-        "$mainUrl/lancamentos" to "Lançamentos"
+        "$mainUrl/lancamentos" to "Primeira Exibição", // AGORA É A PRIMEIRA
+        "$mainUrl/filmes" to "Últimos Filmes",
+        "$mainUrl/series" to "Últimas Séries"
     )
 
     // =========================================================================
@@ -30,54 +34,46 @@ class SuperFlix : MainAPI() {
 
         val home = mutableListOf<SearchResponse>()
 
-        document.select("div.recs-grid a.rec-card, .movie-card, article, .item").forEach { element ->
-            element.toSearchResult()?.let { home.add(it) }
+        // Seletores para a página inicial
+        document.select("a.card, div.recs-grid a.rec-card, .movie-card, article, .item").forEach { element ->
+            toSearchResult(element)?.let { home.add(it) }
         }
 
         // Fallback
         if (home.isEmpty()) {
-            document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { link ->
-                link.toSearchResult()?.let { home.add(it) }
+            document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { element ->
+                toSearchResult(element)?.let { home.add(it) }
             }
         }
 
         return newHomePageResponse(request.name, home.distinctBy { it.url })
     }
 
-// =========================================================================
-// FUNÇÃO DE PESQUISA (CORRIGIDA COM BASE NO HTML)
-// =========================================================================
-override suspend fun search(query: String): List<SearchResponse> {
-    println("🔍 SuperFlix: Buscando por: '$query'")
-    
-    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-    val searchUrl = "$mainUrl/?s=$encodedQuery"
-    println("📡 URL: $searchUrl")
-    
-    val document = app.get(searchUrl).document
-    val results = mutableListOf<SearchResponse>()
-
-    // SELEÇÃO CORRETA: .card (conforme o HTML que você mostrou)
-    document.select("a.card").forEach { card ->
-        val title = card.attr("title")
-        val href = card.attr("href")
+    // =========================================================================
+    // FUNÇÃO AUXILIAR: CONVERTER ELEMENTO PARA SEARCHRESPONSE
+    // =========================================================================
+    private fun toSearchResult(element: Element): SearchResponse? {
+        // Tenta pegar o título do atributo 'title' ou do alt da imagem
+        val title = element.attr("title") ?: element.selectFirst("img")?.attr("alt") ?: return null
         
-        println("🎬 Card encontrado: $title -> $href")
+        val href = element.attr("href")
+        if (href.isNullOrBlank()) return null
         
-        // Extrai a imagem
-        val img = card.selectFirst("img.card-img")
-        val poster = img?.attr("src")?.let { fixUrl(it) }
-        
-        // Extrai o tipo (FILME/SÉRIE)
-        val badge = card.selectFirst("span.badge-kind")
-        val isSerie = badge?.text()?.contains("SÉRIE", ignoreCase = true) ?: false
+        // Encontra o pôster
+        val imgElement = element.selectFirst("img")
+        val poster = imgElement?.attr("src")?.let { fixUrl(it) }
         
         // Extrai o ano do título
         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
+        
+        // Verifica se é série
+        val badge = element.selectFirst("span.badge-kind")
+        val isSerie = badge?.text()?.contains("SÉRIE", ignoreCase = true) ?: 
+                     href.contains("/serie/") || title.contains("Temporada", ignoreCase = true)
+        
         val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
         
-        // Cria o resultado
-        val result = if (isSerie) {
+        return if (isSerie) {
             newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
                 this.posterUrl = poster
                 this.year = year
@@ -88,63 +84,32 @@ override suspend fun search(query: String): List<SearchResponse> {
                 this.year = year
             }
         }
-        
-        results.add(result)
     }
-    
-    println("✅ SuperFlix: Busca finalizada - ${results.size} resultados")
-    return results
-} =========================================================================
-// FUNÇÃO DE PESQUISA (CORRIGIDA COM BASE NO HTML)
-// =========================================================================
-override suspend fun search(query: String): List<SearchResponse> {
-    println("🔍 SuperFlix: Buscando por: '$query'")
-    
-    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-    val searchUrl = "$mainUrl/?s=$encodedQuery"
-    println("📡 URL: $searchUrl")
-    
-    val document = app.get(searchUrl).document
-    val results = mutableListOf<SearchResponse>()
 
-    // SELEÇÃO CORRETA: .card (conforme o HTML que você mostrou)
-    document.select("a.card").forEach { card ->
-        val title = card.attr("title")
-        val href = card.attr("href")
+    // =========================================================================
+    // PESQUISA
+    // =========================================================================
+    override suspend fun search(query: String): List<SearchResponse> {
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        val searchUrl = "$mainUrl/?s=$encodedQuery"
         
-        println("🎬 Card encontrado: $title -> $href")
-        
-        // Extrai a imagem
-        val img = card.selectFirst("img.card-img")
-        val poster = img?.attr("src")?.let { fixUrl(it) }
-        
-        // Extrai o tipo (FILME/SÉRIE)
-        val badge = card.selectFirst("span.badge-kind")
-        val isSerie = badge?.text()?.contains("SÉRIE", ignoreCase = true) ?: false
-        
-        // Extrai o ano do título
-        val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)?.toIntOrNull()
-        val cleanTitle = title.replace(Regex("\\(\\d{4}\\)"), "").trim()
-        
-        // Cria o resultado
-        val result = if (isSerie) {
-            newTvSeriesSearchResponse(cleanTitle, fixUrl(href), TvType.TvSeries) {
-                this.posterUrl = poster
-                this.year = year
-            }
-        } else {
-            newMovieSearchResponse(cleanTitle, fixUrl(href), TvType.Movie) {
-                this.posterUrl = poster
-                this.year = year
-            }
+        val document = app.get(searchUrl).document
+        val results = mutableListOf<SearchResponse>()
+
+        // Seletores para busca
+        document.select("a.card, .card a").forEach { element ->
+            toSearchResult(element)?.let { results.add(it) }
         }
         
-        results.add(result)
+        // Fallback
+        if (results.isEmpty()) {
+            document.select("a[href*='/filme/'], a[href*='/serie/']").forEach { element ->
+                toSearchResult(element)?.let { results.add(it) }
+            }
+        }
+
+        return results.distinctBy { it.url }
     }
-    
-    println("✅ SuperFlix: Busca finalizada - ${results.size} resultados")
-    return results
-}
 
     // =========================================================================
     // CARREGAR DETALHES DO CONTEÚDO
