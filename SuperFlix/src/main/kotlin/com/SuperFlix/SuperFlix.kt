@@ -190,8 +190,7 @@ class SuperFlix : MainAPI() {
                 if (actor.name.isNotBlank()) {
                     Actor(
                         name = actor.name, // Nome romanizado (ex: "Koutaro Nishiyama")
-                        role = actor.character, // Personagem que interpreta
-                        image = actor.profile_path?.let { "$tmdbImageUrl/w185$it" }
+                       image = actor.profile_path?.let { "$tmdbImageUrl/w185$it" }
                     )
                 } else {
                     null
