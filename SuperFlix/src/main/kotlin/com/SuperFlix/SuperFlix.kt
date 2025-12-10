@@ -22,6 +22,9 @@ class SuperFlix : MainAPI() {
     private val tmdbBaseUrl = "https://api.themoviedb.org/3"
     private val tmdbImageUrl = "https://image.tmdb.org/t/p"
 
+    // User-Agent de navegador desktop para tentar obter links de melhor qualidade
+    private val desktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    
     override val mainPage = mainPageOf(
         "$mainUrl/lancamentos" to "Lançamentos",
         "$mainUrl/filmes" to "Últimos Filmes",
@@ -206,10 +209,16 @@ class SuperFlix : MainAPI() {
     private fun getHighQualityTrailer(videos: List<TMDBVideo>?): String? {
         return videos?.mapNotNull { video ->
             when {
+                // PRIORIDADE 1: Vimeo (geralmente tem melhor controle de qualidade)
+                video.site == "Vimeo" && (video.type == "Trailer" || video.type == "Teaser") ->
+                    Triple(video.key, 15, "Vimeo")
+                // PRIORIDADE 2: YouTube Trailers
                 video.site == "YouTube" && video.type == "Trailer" ->
                     Triple(video.key, 10, "YouTube Trailer")
+                // PRIORIDADE 3: YouTube Teasers
                 video.site == "YouTube" && video.type == "Teaser" ->
                     Triple(video.key, 8, "YouTube Teaser")
+                // PRIORIDADE 4: Outros vídeos do YouTube
                 video.site == "YouTube" && (video.type == "Clip" || video.type == "Featurette") ->
                     Triple(video.key, 5, "YouTube Clip")
                 else -> null
@@ -217,10 +226,19 @@ class SuperFlix : MainAPI() {
         }
         ?.sortedByDescending { it.second }
         ?.firstOrNull()
-        ?.let { (key, _, _) ->
-            // SOLUÇÃO: Usar URL completa do YouTube como o TMDB faz
-            // Esta URL permite que o YouTube otimize a qualidade automaticamente
-            "https://www.youtube.com/watch?v=$key"
+        ?.let { (key, _, site) ->
+            when {
+                site == "Vimeo" -> {
+                    // Vimeo: URL de embed com qualidade controlável
+                    if (key.startsWith("http")) key else "https://player.vimeo.com/video/$key"
+                }
+                key.startsWith("http") -> key
+                else -> {
+                    // YouTube: URL completa para permitir que o YouTube otimize a qualidade
+                    // e adicionamos parâmetros para tentar forçar melhor qualidade
+                    "https://www.youtube.com/watch?v=$key&rel=0&showinfo=0&autoplay=1"
+                }
+            }
         }
     }
 
@@ -232,10 +250,36 @@ class SuperFlix : MainAPI() {
                      "&language=pt-BR" +
                      "&append_to_response=credits,videos,recommendations"
 
-            val response = app.get(url, timeout = 10_000)
-            response.parsedSafe<TMDBDetailsResponse>()
+            // TENTATIVA: Simular uma requisição de navegador desktop
+            // usando headers personalizados para tentar obter melhores links
+            val desktopHeaders = mapOf(
+                "User-Agent" to desktopUserAgent,
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language" to "pt-BR,pt;q=0.9,en;q=0.8",
+                "Accept-Encoding" to "gzip, deflate, br",
+                "Connection" to "keep-alive",
+                "Upgrade-Insecure-Requests" to "1"
+            )
+            
+            // Usar o cabeçalho personalizado na requisição ao TMDB
+            val response = app.get(url, headers = desktopHeaders, timeout = 15_000)
+            val details = response.parsedSafe<TMDBDetailsResponse>()
+
+            details
         } catch (e: Exception) {
-            null
+            // Fallback: tentar sem headers personalizados se falhar
+            try {
+                val type = if (isTv) "tv" else "movie"
+                val url = "$tmdbBaseUrl/$type/$id?" +
+                         "api_key=$tmdbApiKey" +
+                         "&language=pt-BR" +
+                         "&append_to_response=credits,videos,recommendations"
+                
+                val response = app.get(url, timeout = 10_000)
+                response.parsedSafe<TMDBDetailsResponse>()
+            } catch (e2: Exception) {
+                null
+            }
         }
     }
 
@@ -245,8 +289,8 @@ class SuperFlix : MainAPI() {
                                   "api_key=$tmdbApiKey" +
                                   "&language=pt-BR"
 
-            val seriesResponse = app.get(seriesDetailsUrl, timeout = 10_000)
-            val seriesDetails = seriesResponse.parsedSafe<TMDBTVDetailsResponse>()
+            val response = app.get(seriesDetailsUrl, timeout = 10_000)
+            val seriesDetails = response.parsedSafe<TMDBTVDetailsResponse>()
 
             val seasonsEpisodes = mutableMapOf<Int, List<TMDBEpisode>>()
 
