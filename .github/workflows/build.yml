@@ -62,12 +62,13 @@ jobs:
                   sed -i -E 's|"jarUrl": "[^"]*/([^/]+)\.jar"|"jarUrl": "'"$REPO_BASE_URL_ESCAPED"'/\1.jar"|g' builds/plugins.json
 
                   # 6. CRIA o manifesto principal (repo.json)
-                  echo "{
-                    \"name\": \"lietrepo\",
-                    \"description\": \"repositório BR do cloudstream\",
-                    \"manifestVersion\": 1,
-                    \"pluginLists\": $PLUGINS_LIST
-                  }" > builds/repo.json
+echo "{
+  \"name\": \"lietrepo\",
+  \"icon\": \"https://github.com/lawlietbr.png\",
+  \"description\": \"Repositório BR do CloudStream\",
+  \"manifestVersion\": 1,
+  \"pluginLists\": $PLUGINS_LIST
+}" > builds/repo.json
 
                   # 7. COPIA os arquivos .cs3 e .jar para a pasta builds/
                   find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
