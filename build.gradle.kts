@@ -32,12 +32,12 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo("https://github.com/euluanzz/lawlietbr")
+        setRepo("https://github.com/lawlietbt/lietrepo")
         authors = listOf("lawlietbr")
     }
 
     android {
-        namespace = "com.lawliet"
+        namespace = "com.lietrepo"
 
         defaultConfig {
             minSdk = 21
