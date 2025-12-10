@@ -122,10 +122,10 @@ class SuperFlix : MainAPI() {
         val document = app.get(url).document
 
         // Extrair score do site
-        val score = extractScoreFromSite(document)
+        val scoreInt = extractScoreFromSite(document)
         
         // Verificar se há score no TMDB (se não tiver no site, usa do TMDB)
-        val tmdbScore = score ?: extractTMDBScore(document)
+        val tmdbScoreInt = extractTMDBScore(document)
 
         val titleElement = document.selectFirst("h1, .title")
         val title = titleElement?.text() ?: return null
@@ -150,10 +150,15 @@ class SuperFlix : MainAPI() {
 
         val siteRecommendations = extractRecommendationsFromSite(document)
 
+        // Converter Int para Score
+        val score = scoreInt?.let { Score(it) }
+        val tmdbScore = tmdbScoreInt?.let { Score(it) }
+        val finalScore = score ?: tmdbScore ?: tmdbInfo?.score
+
         return if (tmdbInfo != null) {
-            createLoadResponseWithTMDB(tmdbInfo, url, document, isAnime, isSerie, siteRecommendations, score ?: tmdbScore, duration, tags, cast)
+            createLoadResponseWithTMDB(tmdbInfo, url, document, isAnime, isSerie, siteRecommendations, finalScore, duration, tags, cast)
         } else {
-            createLoadResponseFromSite(document, url, cleanTitle, year, isAnime, isSerie, score ?: tmdbScore, duration, tags, cast)
+            createLoadResponseFromSite(document, url, cleanTitle, year, isAnime, isSerie, finalScore, duration, tags, cast)
         }
     }
 
@@ -289,7 +294,8 @@ class SuperFlix : MainAPI() {
             }
 
             // Extrair score do TMDB (está em escala 0-10, converter para 0-10000)
-            val tmdbScore = details?.vote_average?.let { (it * 1000).toInt() }
+            val tmdbScoreInt = details?.vote_average?.let { (it * 1000).toInt() }
+            val tmdbScore = tmdbScoreInt?.let { Score(it) }
 
             val allActors = details?.credits?.cast?.mapNotNull { actor ->
                 if (actor.name.isNotBlank()) {
@@ -404,7 +410,7 @@ class SuperFlix : MainAPI() {
         isAnime: Boolean,
         isSerie: Boolean,
         siteRecommendations: List<SearchResponse>,
-        score: Int?,
+        score: Score?,
         duration: Int?,
         tags: List<String>?,
         cast: List<String>?
@@ -672,7 +678,7 @@ class SuperFlix : MainAPI() {
         year: Int?,
         isAnime: Boolean,
         isSerie: Boolean,
-        score: Int?,
+        score: Score?,
         duration: Int?,
         tags: List<String>?,
         cast: List<String>?
@@ -755,7 +761,7 @@ class SuperFlix : MainAPI() {
         val youtubeTrailer: String?,
         val duration: Int?,
         val seasonsEpisodes: Map<Int, List<TMDBEpisode>> = emptyMap(),
-        val score: Int? = null
+        val score: Score? = null
     )
 
     private data class TMDBEpisode(
