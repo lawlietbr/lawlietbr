@@ -242,7 +242,7 @@ class SuperFlix : MainAPI() {
     private suspend fun getTMDBAllSeasons(seriesId: Int): Map<Int, List<TMDBEpisode>> {
         return try {
             val seriesDetailsUrl = "$tmdbBaseUrl/tv/$seriesId?" +
-                                  "api_key=$tmdbApiKey" +
+                                  "api_key=${Build.Config.TMDB_API_KEY}" +
                                   "&language=pt-BR"
 
             val seriesResponse = app.get(seriesDetailsUrl, timeout = 10_000)
