@@ -84,8 +84,15 @@ jobs:
           echo "=== FIM ==="
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+     - name: Debug - Verificar estrutura do projeto
+         run: |
+                 echo "=== ESTRUTURA DO PROJETO ==="
+                 find . -name "*.kt" | grep -i superflix || true
+                 find . -name "build.gradle*" | xargs grep -l "TMDB" || true
+            .    echo "=== FIM ==="
 
-      # 6. BUILD com debug aprimorado
+
+    # 6. BUILD com debug aprimorado
       - name: Build with Gradle
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
@@ -130,6 +137,18 @@ jobs:
           ./gradlew clean assemble --refresh-dependencies --info --stacktrace
           
           echo "=== BUILD COMPLETO ==="
+      - name: Debug - Verificar APK gerado
+       run: |
+             echo "=== VERIFICANDO APK ==="
+             find . -name "*.apk" | while read apk; do
+             echo "APK: $apk"
+      # Tentar extrair e verificar strings
+      if command -v strings &> /dev/null; then
+        echo "Strings contendo TMDB no APK:"
+        strings "$apk" | grep -i "tmdb\|api_key" | head -10 || true
+      fi
+    done
+
 
       # 7. DEBUG: Verificar BuildConfig gerado
       - name: Debug - Verificar BuildConfig gerado
@@ -178,4 +197,4 @@ jobs:
           
           echo "=== FIM DEBUG ==="
 
-      # ... (restante do código mantido igual) ...
+      
