@@ -19,10 +19,16 @@ class SuperFlix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
     override val usesWebView = true
 
-    internal val tmdbApiKey = BuildConfig.TMDB_API_KEY
-    internal val tmdbBaseUrl = "https://api.themoviedb.org/3"
-    internal val tmdbImageUrl = "https://image.tmdb.org/t/p"
+    internal val tmdbApiKey = Config.TMDB_API_KEY
+    internal val tmdbBaseUrl = Config.TMDB_BASE_URL
+    internal val tmdbImageUrl = Config.TMDB_IMG_URL
    
+init {
+        Config.logConfig()  // ← Mostra configurações
+        println("🔥 SuperFlix inicializado")
+        println("🔑 TMDB Key: ${tmdbApiKey.take(4)}...")
+    }
+
  override val mainPage = mainPageOf(
         "$mainUrl/lancamentos" to "Lançamentos",
         "$mainUrl/filmes" to "Últimos Filmes",
