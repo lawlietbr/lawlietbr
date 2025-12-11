@@ -45,7 +45,7 @@ class SuperFlix : MainAPI() {
             // Faz requisição para SEU proxy
             val response = app.get(url.toString(), timeout = 15_000)
             
-            if (response.status == 200) {
+            if (response.code == 200) {
                 val json = JSONObject(response.text)
                 val results = json.optJSONArray("results")
                 
