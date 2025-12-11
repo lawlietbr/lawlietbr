@@ -8,3 +8,10 @@ cloudstream {
     tvTypes = listOf("Movie", "TvSeries")
     iconUrl = "https://superflix21.lol/assets/logo.png"
 }
+
+android {
+    defaultConfig {
+        
+        buildConfigField "String", "TMDB_API_KEY", "\"${System.getenv("TMDB_API_KEY")}\""
+    }
+}
