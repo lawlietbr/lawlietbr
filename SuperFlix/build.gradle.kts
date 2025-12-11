@@ -9,7 +9,7 @@ cloudstream {
     iconUrl = "https://superflix21.lol/assets/logo.png"
 }
 
-import java.util.properties
+import java.util.Properties
 
 plugins {
     id("com.android.library")
