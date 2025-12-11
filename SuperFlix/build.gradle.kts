@@ -36,12 +36,3 @@ android {
     }
 }
 
-// Tarefa customizada para debug (OPCIONAL - pode remover)
-tasks.register("printDebugInfo") {
-    doLast {
-        println("=== DEBUG INFO ===")
-        println("BuildConfig será gerado com:")
-        println("TMDB_API_KEY: ${project.findProperty("TMDB_API_KEY")?.take(8)}...")
-        println("==================")
-    }
-}
