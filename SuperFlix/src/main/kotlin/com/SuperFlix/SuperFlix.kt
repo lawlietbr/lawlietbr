@@ -23,9 +23,9 @@ class SuperFlix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
     override val usesWebView = true
 
-    private val tmdbApiKey = BuildConfig.TMDB_API_KEY
-    private val tmdbBaseUrl = "https://api.themoviedb.org/3"
-    private val tmdbImageUrl = "https://image.tmdb.org/t/p"
+    val tmdbApiKey = BuildConfig.TMDB_API_KEY
+    val tmdbBaseUrl = "https://api.themoviedb.org/3"
+    val tmdbImageUrl = "https://image.tmdb.org/t/p"
 
     // API do AnimeSkip para timestamps de abertura
     private val aniskipApiUrl = "https://api.aniskip.com/v2"
