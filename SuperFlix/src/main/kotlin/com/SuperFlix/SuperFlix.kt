@@ -4,7 +4,6 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
-import com.lagradost.cloudstream3.metaproviders.TmdbLink
 
 class SuperFlix : TmdbProvider() {
     override var mainUrl = "https://superflix21.lol"
@@ -231,7 +230,8 @@ class SuperFlix : TmdbProvider() {
                     this.episode = epNumber
                     
                     // Pode adicionar sinopse do site se quiser
-                    element.selectFirst(".ep-desc, .description")?.text()?.trim()?.let { desc ->
+                    val descElement = element.selectFirst(".ep-desc, .description")
+                    descElement?.text()?.trim()?.let { desc ->
                         if (desc.isNotBlank()) {
                             this.description = desc
                             println("📝 [DEBUG] Sinopse do episódio: ${desc.take(50)}...")
@@ -294,12 +294,13 @@ class SuperFlix : TmdbProvider() {
         
         // 2. Tentar classe ep-number
         val epNumberElement = element.selectFirst(".ep-number, .number, .episode-number")
-        val epNumberText = epNumberElement?.text()
-        if (epNumberText?.isNotBlank() == true) {
-            val num = epNumberText.toIntOrNull()
-            if (num != null) {
-                println("✅ [DEBUG] Número do .ep-number: $num")
-                return num
+        epNumberElement?.text()?.let { epNumberText ->
+            if (epNumberText.isNotBlank()) {
+                val num = epNumberText.toIntOrNull()
+                if (num != null) {
+                    println("✅ [DEBUG] Número do .ep-number: $num")
+                    return num
+                }
             }
         }
         
