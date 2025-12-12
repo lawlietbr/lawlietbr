@@ -62,8 +62,8 @@ jobs:
 
                   # 6. CRIA o manifesto principal (repo.json)
                   echo "{
-                    \"name\": \"CloudStream Brasil Repo\",
-                    \"description\": \"Repositório Brasileiro de Provedores CloudStream\",
+                    \"name\": \"lawlietrepo\",
+                    \"description\": \"Repositório Brasileiro para o Cloudstream\",
                     \"manifestVersion\": 1,
                     \"pluginLists\": $PLUGINS_LIST
                   }" > builds/repo.json
@@ -72,7 +72,7 @@ jobs:
                   find . -type f -name "*.cs3" -exec cp {} builds/ \; || true
                   find . -type f -name "*.jar" -exec cp {} builds/ \; || true
 
-            # 5. DEPLOY FINAL COM AÇÃO DE COMMIT DIRETO (Standard CloudStream)
+            # 5. DEPLOY FINAL COM AÇÃO DE COMMIT DIRETO 
             - name: Commit Providers to main branch
               uses: stefanzweifel/git-auto-commit-action@v5
               with:
