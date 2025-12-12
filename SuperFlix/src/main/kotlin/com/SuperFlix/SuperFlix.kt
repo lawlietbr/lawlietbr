@@ -591,13 +591,15 @@ class SuperFlix : MainAPI() {
             tmdbEpisode?.air_date?.let { airDate ->
                 try {
 
-                  val dateFormatter = SimpleDateFormat("dd-MM-yyyy")
-              val date: Date? =      dateFormatter.parse("01-01-2023")
-  val timestamp = date?.time 
-                 val dateFormatter = SimpleDateFormat("dd-MM-yyyy")
-                    val date = dateFormatter.parse(airDate)
-                    this.date = date.time
-                } catch (e: Exception) {
+                  try {
+    val dateFormatter = SimpleDateFormat("dd-MM-yyyy")
+    val airDateParsed = dateFormatter.parse(airDate)
+    if (airDateParsed != null) {
+        this.date = airDateParsed.time
+    }
+} catch (e: Exception) {
+    // Ignora erro de parse
+}
                     // Ignora erro de parse
                 }
             }
