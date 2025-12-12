@@ -36,7 +36,8 @@ class SuperFlix : MainAPI() {
             
             val searchResponse = app.get(searchUrl, timeout = 10_000)
             
-            if (searchResponse.status != 200) return null
+            // CORREÇÃO: CloudStream usa .code não .status
+            if (searchResponse.code != 200) return null
             
             val searchJson = JSONObject(searchResponse.text)
             val results = searchJson.getJSONArray("results")
@@ -53,13 +54,14 @@ class SuperFlix : MainAPI() {
             
             val detailsResponse = app.get(detailsUrl, timeout = 10_000)
             
-            if (detailsResponse.status != 200) {
+            // CORREÇÃO: CloudStream usa .code não .status
+            if (detailsResponse.code != 200) {
                 // Fallback: usa dados básicos se detalhes falharem
                 return createBasicTMDBInfo(firstItem, isTv)
             }
             
             val detailsJson = JSONObject(detailsResponse.text)
-            return parseFullTMDBInfo(detailsJson, isTv)
+            return parseFullTMDBInfo(detailsJson, isTv, itemId)
             
         } catch (e: Exception) {
             e.printStackTrace()
@@ -89,7 +91,7 @@ class SuperFlix : MainAPI() {
     }
 
     // ============ FUNÇÃO PARA PROCESSAR DETALHES COMPLETOS ============
-    private suspend fun parseFullTMDBInfo(json: JSONObject, isTv: Boolean): TMDBInfo {
+    private suspend fun parseFullTMDBInfo(json: JSONObject, isTv: Boolean, itemId: Int): TMDBInfo {
         // Extrai atores dos créditos
         val actors = mutableListOf<Actor>()
         try {
@@ -119,9 +121,11 @@ class SuperFlix : MainAPI() {
         // Extrai trailer do YouTube
         var youtubeTrailer: String? = null
         try {
-            val videos = json.getJSONArray("results")
-            for (i in 0 until videos.length()) {
-                val video = videos.getJSONObject(i)
+            // CORREÇÃO: A estrutura correta é videos.results
+            val videos = json.getJSONObject("videos")
+            val results = videos.getJSONArray("results")
+            for (i in 0 until results.length()) {
+                val video = results.getJSONObject(i)
                 if (video.getString("site") == "YouTube" && 
                     video.getString("type") == "Trailer") {
                     youtubeTrailer = "https://www.youtube.com/watch?v=${video.getString("key")}"
@@ -146,7 +150,7 @@ class SuperFlix : MainAPI() {
         
         // Para séries, busca temporadas/episódios
         val seasonsEpisodes = if (isTv) {
-            getSeasonsWithEpisodes(json.getInt("id"))
+            getSeasonsWithEpisodes(itemId)
         } else {
             emptyMap()
         }
@@ -179,7 +183,8 @@ class SuperFlix : MainAPI() {
             val seriesUrl = "$TMDB_PROXY_URL/tv/$seriesId?language=pt-BR"
             val seriesResponse = app.get(seriesUrl, timeout = 10_000)
             
-            if (seriesResponse.status != 200) return emptyMap()
+            // CORREÇÃO: CloudStream usa .code não .status
+            if (seriesResponse.code != 200) return emptyMap()
             
             val seriesJson = JSONObject(seriesResponse.text)
             val seasonsArray = seriesJson.getJSONArray("seasons")
@@ -210,7 +215,8 @@ class SuperFlix : MainAPI() {
             val url = "$TMDB_PROXY_URL/tv/$seriesId/season/$seasonNumber?language=pt-BR"
             val response = app.get(url, timeout = 10_000)
             
-            if (response.status != 200) return emptyList()
+            // CORREÇÃO: CloudStream usa .code não .status
+            if (response.code != 200) return emptyList()
             
             val json = JSONObject(response.text)
             val episodesArray = json.getJSONArray("episodes")
@@ -268,7 +274,7 @@ class SuperFlix : MainAPI() {
     }
 
     // ============ FUNÇÃO PARA CRIAR RESPOSTA COM DADOS DO TMDB ============
-    private fun createLoadResponseWithTMDB(
+    private suspend fun createLoadResponseWithTMDB(
         tmdbInfo: TMDBInfo,
         url: String,
         episodes: List<Episode>,
@@ -279,6 +285,7 @@ class SuperFlix : MainAPI() {
         return if (isSerie || isAnime) {
             val type = if (isAnime) TvType.Anime else TvType.TvSeries
             
+            // CORREÇÃO: Esta função deve ser suspensa
             newTvSeriesLoadResponse(
                 name = tmdbInfo.title ?: "",
                 url = url,
@@ -302,7 +309,11 @@ class SuperFlix : MainAPI() {
                 this.recommendations = siteRecommendations.takeIf { it.isNotEmpty() }
             }
         } else {
+            // CORREÇÃO: Precisa do documento para encontrar playerUrl
+            val document = app.get(url).document
             val playerUrl = findPlayerUrl(document)
+            
+            // CORREÇÃO: Esta função deve ser suspensa
             newMovieLoadResponse(
                 name = tmdbInfo.title ?: "",
                 url = url,
@@ -505,7 +516,7 @@ class SuperFlix : MainAPI() {
         }
     }
 
-    private fun createLoadResponseFromSite(
+    private suspend fun createLoadResponseFromSite(
         document: org.jsoup.nodes.Document,
         url: String,
         title: String,
@@ -527,6 +538,7 @@ class SuperFlix : MainAPI() {
 
         return if (isAnime || isSerie) {
             val type = if (isAnime) TvType.Anime else TvType.TvSeries
+            // CORREÇÃO: Esta função deve ser suspensa
             newTvSeriesLoadResponse(title, url, type, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -536,6 +548,7 @@ class SuperFlix : MainAPI() {
             }
         } else {
             val playerUrl = findPlayerUrl(document)
+            // CORREÇÃO: Esta função deve ser suspensa
             newMovieLoadResponse(title, url, TvType.Movie, playerUrl ?: url) {
                 this.posterUrl = poster
                 this.year = year
