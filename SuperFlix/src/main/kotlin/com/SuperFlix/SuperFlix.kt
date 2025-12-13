@@ -269,8 +269,6 @@ class SuperFlix : TmdbProvider() {
             
             for (selector in altSelectors) {
                 val altElements = document.select(selector)
-                println("🔍 [DEBUG] Seletor '$selector': ${altElements.size} elementos")
-                
                 if (altElements.isNotEmpty()) {
                    
                     println(altElements.first().outerHtml().take(200))
